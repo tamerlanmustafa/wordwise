@@ -210,6 +210,18 @@ describe('resetAccountState', () => {
     expect(usePracticePathStore.getState().cursor).toBe(0);
   });
 
+  it('forgets the cached pages held in memory, not just the ones on disk', async () => {
+    // The film feed paints from memory on its first frame. Wiping only the
+    // `swr_` keys on disk would open the next account's feed on this one's
+    // list — and that list is personalised.
+    const { writeCache, peekCache } = require('../swrCache');
+    await writeCache('movies.byCefr.A1.recommended.desc.all', [{ id: 1 }]);
+
+    await resetAccountState();
+
+    expect(peekCache('movies.byCefr.A1.recommended.desc.all')).toBeNull();
+  });
+
   it('survives one store throwing without skipping the rest', async () => {
     const { useDailyGoalStore } = require('../../stores/dailyGoalStore');
     const { useListsStore } = require('../../stores/listsStore');

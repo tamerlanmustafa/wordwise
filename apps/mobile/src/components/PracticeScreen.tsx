@@ -95,6 +95,13 @@ function PracticeScreenInner({
   // Parks the path at its bottom once per cursor — see the ScrollView below.
   const scrollRef = useRef<ScrollView>(null);
   const didAnchor = useRef(false);
+  // False until the first anchor has landed. A ScrollView's first frame is at
+  // offset 0, which on this path is the TOP — the far end of the road, all
+  // locked tiles — and the scroll to the bottom arrives a frame later. Measured
+  // after a cold start: one frame of tiles 38–46, then a jump to START on 16.
+  // Only the first anchor hides anything; later re-anchors (a finished
+  // session moving the cursor) move a path that is already on screen.
+  const [pathSettled, setPathSettled] = useState(false);
   useEffect(() => {
     didAnchor.current = false;
   }, [cursor]);
@@ -293,13 +300,16 @@ function PracticeScreenInner({
           if (!pathHydrated || didAnchor.current) return;
           didAnchor.current = true;
           scrollRef.current?.scrollToEnd({ animated: false });
+          // After the scroll, in the same handler, so the path is shown at
+          // the offset it was sent to rather than the one it was drawn at.
+          setPathSettled(true);
         }}
       >
         {/* The tile chain. The active tile is at the cursor; the rest
             are completed (past) or locked (future). The path itself
             doesn't know about the paywall / daily cap; the parent's
             `handleTilePress` does. */}
-        <View style={s.pathWrap}>
+        <View style={[s.pathWrap, !pathSettled && s.pathUnsettled]}>
           {/* No heading and no lesson number. The path is the only thing on
               the tab, so a label saying so was telling the user where they
               already were, and the lesson count was a number with nothing to
@@ -376,6 +386,10 @@ const makeStyles = (tc: ThemeColors) =>
     pathWrap: {
       paddingHorizontal: 18,
       paddingTop: 8,
+    },
+    // Laid out, so its content size reaches the anchor; just not drawn yet.
+    pathUnsettled: {
+      opacity: 0,
     },
   });
 

@@ -6,10 +6,11 @@ jest.mock('../../services/api', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
+import { primeCefrMoviesCache, useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../../services/api';
+import { clearCacheMemory } from '../../services/swrCache';
 import { renderHook, flushAsync, act, cleanupHooks } from '../../test-utils/renderHook';
-import type { MovieType } from '../../components/filmFeed/filterOptions';
+import { DEFAULT_FEED_FILTERS, type MovieType } from '../../components/filmFeed/filterOptions';
 
 const mockGet = wordwiseApi.getMoviesByCefr as jest.Mock;
 
@@ -45,6 +46,8 @@ describe('useInfiniteCefrMovies', () => {
     // tests in a file. Without this, one test's successful load paints the
     // next test's list and the suite passes or fails on ordering.
     await AsyncStorage.clear();
+    // …and holds it in memory, which AsyncStorage.clear() does not reach.
+    clearCacheMemory();
   });
 
   afterEach(() => cleanupHooks());
@@ -437,6 +440,89 @@ describe('useInfiniteCefrMovies', () => {
       const { result } = renderHook(() => useInfiniteCefrMovies('B1', 'rating', 'desc'));
       await flushAsync();
 
+      expect(result.current.movies).toEqual([]);
+      (Date.now as jest.Mock).mockRestore();
+    });
+  });
+
+  // ── Painted on the first frame ───────────────────────────────────────────
+  //
+  // Reading the cache when the tab mounted still put a skeleton in the first
+  // frame, because the read answers after it. Measured after a cold start:
+  // ~300ms of skeleton rows over a page that was on disk. Launch reads it now,
+  // and the hook starts from memory.
+  describe('primed at launch', () => {
+    const order = DEFAULT_FEED_FILTERS.sortAsc ? 'asc' : 'desc';
+    const onDisk = async (level: string, movies: unknown[], sort: string = DEFAULT_FEED_FILTERS.sort) => {
+      const key = `swr_movies.byCefr.${level}.${sort}.${order}.${DEFAULT_FEED_FILTERS.movieType}`;
+      await AsyncStorage.setItem(key, JSON.stringify({ data: movies, savedAt: Date.now() }));
+    };
+    /** Every `loading` value the hook ever rendered, in order. */
+    const renderRecording = (level: string, sort = DEFAULT_FEED_FILTERS.sort) => {
+      const loadingSeen: boolean[] = [];
+      const handle = renderHook(() => {
+        const r = useInfiniteCefrMovies(level, sort, order, DEFAULT_FEED_FILTERS.movieType);
+        loadingSeen.push(r.loading);
+        return r;
+      });
+      return { ...handle, loadingSeen };
+    };
+
+    it('renders the cached page on the very first render — no skeleton at all', async () => {
+      await onDisk('A1', [{ id: 1, title: 'Cached' }]);
+      await primeCefrMoviesCache('A1');
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result, loadingSeen } = renderRecording('A1');
+
+      // Before any flush: this is the first frame.
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Cached']);
+      expect(loadingSeen[0]).toBe(false);
+      await flushAsync();
+      // …and the reset the mount effect runs does not flash it back on.
+      expect(loadingSeen).not.toContain(true);
+    });
+
+    it('still lets the network answer replace the primed page', async () => {
+      await onDisk('A1', [{ id: 1, title: 'Cached' }]);
+      await primeCefrMoviesCache('A1');
+      mockGet.mockResolvedValueOnce(page([{ tmdb_id: 9, title: 'Fresh' }], false));
+
+      const { result } = renderRecording('A1');
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Fresh']);
+    });
+
+    it('primes the page the feed opens on — the default filters at that level', async () => {
+      await onDisk('A1', [{ id: 1, title: 'Default' }]);
+      await onDisk('B2', [{ id: 2, title: 'Other level' }]);
+
+      expect((await primeCefrMoviesCache('A1'))?.map((m) => m.title)).toEqual(['Default']);
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      // Not another level's page: that one was never read.
+      const { loadingSeen } = renderRecording('B2');
+      expect(loadingSeen[0]).toBe(true);
+      await flushAsync(); // its own disk read still paints it, a frame later
+    });
+
+    it('resolves to nothing when there is no page on disk', async () => {
+      expect(await primeCefrMoviesCache('A1')).toBeNull();
+    });
+
+    it('does not paint a primed page that is past its lifetime', async () => {
+      await onDisk('A1', [{ id: 1, title: 'Cached' }]);
+      await primeCefrMoviesCache('A1');
+      const now = Date.now();
+      jest.spyOn(Date, 'now').mockReturnValue(now + 25 * 60 * 60 * 1000);
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result, loadingSeen } = renderRecording('A1');
+
+      expect(result.current.movies).toEqual([]);
+      expect(loadingSeen[0]).toBe(true);
+      await flushAsync();
       expect(result.current.movies).toEqual([]);
       (Date.now as jest.Mock).mockRestore();
     });

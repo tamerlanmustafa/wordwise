@@ -158,11 +158,17 @@ const TRAIL = { x: RTL ? 0 : 1, y: 0.5 };
 const CAST_START = { x: RTL ? 0 : 1, y: 0 };
 const CAST_END   = { x: RTL ? 0.75 : 0.25, y: 1 };
 
+/** The still a card draws. One builder, so a warm-up fetches the same URL the
+ *  card asks for — a different size is a different image to the cache. */
+export function cardBackdropUri(movie: any): string | null {
+  return movie?.backdrop_path ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` : null;
+}
+
 function prefetchMovieImages(movie: any) {
   if (movie.poster_path)
     Image.prefetch(`https://image.tmdb.org/t/p/w500${movie.poster_path}`).catch(() => {});
-  if (movie.backdrop_path)
-    Image.prefetch(`https://image.tmdb.org/t/p/w780${movie.backdrop_path}`).catch(() => {});
+  const backdrop = cardBackdropUri(movie);
+  if (backdrop) Image.prefetch(backdrop).catch(() => {});
 }
 
 interface Props {
@@ -324,9 +330,7 @@ const MovieCard = React.memo(({
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
-  const backdropUri = movie.backdrop_path
-    ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
-    : null;
+  const backdropUri = cardBackdropUri(movie);
   const rating = movie.vote_average > 0 ? Number(movie.vote_average).toFixed(1) : null;
   const year   = movie.release_date ? String(movie.release_date).slice(0, 4) : null;
   // The film's own band. Still shown — it just is not the ring any more,

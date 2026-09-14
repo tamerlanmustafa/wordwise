@@ -1,7 +1,7 @@
 import React, { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
-import { StatusBar, Alert, Platform, UIManager, View, InteractionManager, BackHandler } from 'react-native';
+import { StatusBar, Alert, Platform, UIManager, View, InteractionManager, BackHandler, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuthStore } from '../stores/authStore';
@@ -9,6 +9,10 @@ import { useEntitlementsStore } from '../stores/entitlementsStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useDailyGoalStore } from '../stores/dailyGoalStore';
 import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
+import { usePracticePathStore } from '../stores/practicePathStore';
+import { primeCefrMoviesCache } from '../hooks/useInfiniteCefrMovies';
+import { DEFAULT_LEVEL } from '../components/filmFeed/filterOptions';
+import { cardBackdropUri } from '../components/filmFeed/RankedMovieList';
 import { Ionicons } from '@expo/vector-icons';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useFeedbackPrefsStore, getFeedbackPrefs } from '../stores/feedbackPrefsStore';
@@ -246,6 +250,30 @@ export default function App() {
     });
     return () => task.cancel();
   }, [initialize]);
+
+  // What the lazily-mounted tabs open on, read before they can be tapped.
+  //
+  // Both were read when their tab mounted, which is a frame after that tab's
+  // first paint — measured on the first tap after a cold start: Practice drew
+  // an empty path for ~110ms, and the film feed drew ~300ms of skeleton rows in
+  // front of a page that was on disk. Keyed on the account because both caches
+  // are per account; each is a disk read, and neither sends a request.
+  const signedInId = user?.id ?? null;
+  const profileLevel = user?.proficiency_level || DEFAULT_LEVEL;
+  useEffect(() => {
+    if (signedInId === null) return;
+    void usePracticePathStore.getState().hydrate();
+  }, [signedInId]);
+  useEffect(() => {
+    if (signedInId === null) return;
+    // The same level `useFeedLevel` will open the feed on.
+    void primeCefrMoviesCache(profileLevel).then((page) => {
+      for (const movie of (page ?? []).slice(0, 6)) {
+        const uri = cardBackdropUri(movie);
+        if (uri) Image.prefetch(uri).catch(() => {});
+      }
+    });
+  }, [signedInId, profileLevel]);
 
   // On first mount, try to restore the last chosen target language before
   // letting user.learning_language win. If there's a saved value, lock it

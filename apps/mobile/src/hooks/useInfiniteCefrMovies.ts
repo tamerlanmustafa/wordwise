@@ -46,13 +46,23 @@
  * seed from disk would page through a draw the server has since rotated away
  * from, which is the one failure mode here that corrupts the feed silently
  * rather than erroring.
+ *
+ * ## Painted on the first frame, not after it
+ *
+ * Reading that cache when the tab mounted still showed the skeleton first:
+ * the read is asynchronous, so the first paint had nothing. Measured on the
+ * first tap after a cold start, ~300ms of skeleton rows in front of a page that
+ * was on disk all along. {@link primeCefrMoviesCache} reads it at launch
+ * instead, and the hook takes it from memory in its initial state — so the
+ * list is in the very first frame. Still a disk read, still no request.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { classifyFailure, type ConnectionFailure } from '../services/connection';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../services/api';
-import { readCache, writeCache } from '../services/swrCache';
+import { peekCache, readCache, writeCache } from '../services/swrCache';
 import {
   animatedParam,
+  DEFAULT_FEED_FILTERS,
   type LevelSort,
   type MovieType,
 } from '../components/filmFeed/filterOptions';
@@ -82,6 +92,29 @@ function cacheKey(level: string, sort: MovieSort, order: SortOrder, movieType: M
   return `movies.byCefr.${level}.${sort}.${order}.${movieType}`;
 }
 
+/** A cached page 0 already in memory, or null. Only a non-empty list counts:
+ *  a cache written before a schema change may hold something that is not one. */
+function pageInMemory(key: string): any[] | null {
+  const cached = peekCache<any[]>(key, CACHE_TTL_MS);
+  return Array.isArray(cached) && cached.length > 0 ? cached : null;
+}
+
+/**
+ * Load the page the film feed will open on into memory, before its tab is
+ * tapped. The screen opens on the default filters at the reader's level (see
+ * `FilmFeedScreen`), so that is the one key worth reading.
+ *
+ * Resolves to the page so the caller can warm what it shows. A disk read, no
+ * request: the objection to prefetching at boot (above) is the API call, and
+ * this makes none.
+ */
+export async function primeCefrMoviesCache(level: string): Promise<any[] | null> {
+  const order: SortOrder = DEFAULT_FEED_FILTERS.sortAsc ? 'asc' : 'desc';
+  const key = cacheKey(level, DEFAULT_FEED_FILTERS.sort, order, DEFAULT_FEED_FILTERS.movieType);
+  await readCache<any[]>(key, CACHE_TTL_MS);
+  return pageInMemory(key);
+}
+
 export function useInfiniteCefrMovies(
   level: string,
   sort: MovieSort,
@@ -91,14 +124,17 @@ export function useInfiniteCefrMovies(
    *  every match past the page boundary. */
   movieType: MovieType = 'all',
 ) {
-  const [movies, setMovies] = useState<any[]>([]);
+  // Whatever launch already read, so the first render is the list rather than
+  // a skeleton that the list replaces a moment later.
+  const [initialPage] = useState(() => pageInMemory(cacheKey(level, sort, order, movieType)));
+  const [movies, setMovies] = useState<any[]>(initialPage ?? []);
   // Mirror of `movies` for synchronous reads (removeMovie needs the current
   // index before the async state update commits).
-  const moviesRef = useRef<any[]>([]);
+  const moviesRef = useRef<any[]>(movies);
   useEffect(() => {
     moviesRef.current = movies;
   }, [movies]);
-  const [loading, setLoading] = useState(true);       // initial / filter-reset load
+  const [loading, setLoading] = useState(initialPage === null); // initial / filter-reset load
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,11 +198,20 @@ export function useInfiniteCefrMovies(
         // A reset is a new draw. Clearing it is what lets a level change (or a
         // rotation boundary crossed while Home was mounted) actually reshuffle.
         seedRef.current = null;
-        setLoading(true);
-        // Paint last session's page while this request is in flight. Not
-        // awaited: the whole point is that the disk read and the network
-        // request race, and whichever arrives first shows something.
-        void paintFromCache(reqId, key);
+        const inMemory = pageInMemory(key);
+        if (inMemory) {
+          // Already read this session: paint it in this same render, so the
+          // skeleton never shows at all rather than showing for one frame.
+          paintedRef.current = reqId;
+          setMovies(inMemory);
+          setLoading(false);
+        } else {
+          setLoading(true);
+          // Paint last session's page while this request is in flight. Not
+          // awaited: the whole point is that the disk read and the network
+          // request race, and whichever arrives first shows something.
+          void paintFromCache(reqId, key);
+        }
       } else {
         setLoadingMore(true);
       }

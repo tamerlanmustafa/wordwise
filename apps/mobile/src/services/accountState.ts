@@ -162,6 +162,10 @@ export function resetAccountStores(): void {
     // this drops the copy in memory, or the next account would open Practice
     // to the previous one's streak.
     () => require('../stores/streakSnapshotStore').useStreakSnapshotStore.getState().reset(),
+    // The memory copy of the `swr_` family — the film feed's first page among
+    // it. Disk is wiped below; without this the next account would open the
+    // film feed on the previous one's list.
+    () => require('./swrCache').clearCacheMemory(),
   ];
   for (const resetOne of stores) {
     try {
