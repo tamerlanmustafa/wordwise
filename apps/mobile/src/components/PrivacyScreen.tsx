@@ -39,7 +39,7 @@ function PrivacyContent() {
   const styles = useDocStyles();
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: September 13, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Information We Collect</Text>
       <Text style={styles.body}>
@@ -54,22 +54,22 @@ function PrivacyContent() {
 
       <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
       <Text style={styles.body}>
-        Your data is used to: provide and improve the WordWise service, personalize vocabulary recommendations, power spaced-repetition scheduling, display relevant advertisements (free tier), and communicate with you about your account.
+        Your data is used to: provide and improve the WordWise service, personalize vocabulary recommendations, power spaced-repetition scheduling, and communicate with you about your account.
       </Text>
 
       <Text style={styles.sectionTitle}>3. Data Sharing</Text>
       <Text style={styles.body}>
-        We do not sell your personal data. We share data with: Google (for authentication), DeepL (for translations — only the text being translated), and AdMob (for serving ads to free-tier users — device identifiers only, no personal data). Leaderboard data (username and aggregate stats only) is visible to other users.
+        We do not sell your personal data. We share data with: Google and Apple (for authentication, if you sign in with them), and our translation providers (only the text being translated — never your identity). Leaderboard data (username and aggregate stats only) is visible to other users.
       </Text>
 
       <Text style={styles.sectionTitle}>4. Data Retention</Text>
       <Text style={styles.body}>
-        Your account data is retained as long as your account is active. You can request deletion of your account and all associated data by contacting support. Cached vocabulary data stored locally on your device can be cleared from the app settings.
+        Your account data is retained as long as your account is active. You can permanently delete your account and everything saved to it from Profile → Account → Delete account; you may also contact us at privacy@getwordwise.us. Cached vocabulary data stored locally on your device is removed when you sign out.
       </Text>
 
       <Text style={styles.sectionTitle}>5. Advertising</Text>
       <Text style={styles.body}>
-        Free-tier users see banner advertisements served by Google AdMob. We use non-personalized ads for users under 16 or in regions where personalized advertising is restricted. Premium subscribers see no advertisements.
+        WordWise does not show advertisements and contains no advertising or analytics SDKs. We do not share device identifiers with advertising networks.
       </Text>
 
       <Text style={styles.sectionTitle}>6. Children's Privacy</Text>
@@ -79,7 +79,7 @@ function PrivacyContent() {
 
       <Text style={styles.sectionTitle}>7. Your Rights</Text>
       <Text style={styles.body}>
-        You have the right to access, correct, or delete your personal data. You may also opt out of personalized advertising. To exercise these rights, contact us at privacy@getwordwise.us.
+        You have the right to access, correct, or delete your personal data. Deletion is available in the app at any time (Profile → Account → Delete account). To exercise the other rights, contact us at privacy@getwordwise.us.
       </Text>
 
       <Text style={styles.sectionTitle}>8. Contact</Text>
@@ -97,7 +97,7 @@ function TermsContent() {
   const styles = useDocStyles();
   return (
     <>
-      <Text style={styles.lastUpdated}>Last updated: August 26, 2026</Text>
+      <Text style={styles.lastUpdated}>Last updated: September 13, 2026</Text>
 
       <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
       <Text style={styles.body}>

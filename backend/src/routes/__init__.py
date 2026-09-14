@@ -17,7 +17,6 @@ from .srs import router as srs_router
 from .premium import router as premium_router
 from .feature_flags import router as feature_flags_router
 from .billing import router as billing_router
-from .family import router as family_router
 from .gamification import router as gamification_router
 from .social import router as social_router
 from .student_discount import router as student_discount_router
@@ -28,4 +27,4 @@ from .consumables import router as consumables_router
 from .lists import router as lists_router
 from .surveys import router as surveys_router
 
-__all__ = ["auth_router", "movies_router", "oauth_router", "apple_oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "family_router", "gamification_router", "social_router", "student_discount_router", "quiz_router", "reel_router", "daily_router", "consumables_router", "lists_router", "surveys_router"]
+__all__ = ["auth_router", "movies_router", "oauth_router", "apple_oauth_router", "scripts_router", "cefr_router", "translation_router", "tmdb_router", "user_words_router", "admin_router", "enrichment_router", "reports_router", "upload_router", "books_router", "interactions_router", "srs_router", "premium_router", "feature_flags_router", "billing_router", "gamification_router", "social_router", "student_discount_router", "quiz_router", "reel_router", "daily_router", "consumables_router", "lists_router", "surveys_router"]

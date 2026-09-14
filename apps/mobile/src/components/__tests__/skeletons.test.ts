@@ -196,7 +196,6 @@ describe('content loads behind skeletons, not spinners', () => {
     'components/wordFeed/ListPanel.tsx',
     'components/ReviewScreen.tsx',
     'components/screens/ListDetailScreen.tsx',
-    'components/FamilyPlanScreen.tsx',
   ];
 
   it.each(CONVERTED)('%s draws a skeleton while it loads', (rel) => {
@@ -218,7 +217,6 @@ describe('content loads behind skeletons, not spinners', () => {
       'components/onboarding/PickFirstFilmStep.tsx',
       'components/wordFeed/ListPanel.tsx',
       'components/ReviewScreen.tsx',
-      'components/FamilyPlanScreen.tsx',
     ]) {
       expect(code(rel)).not.toMatch(/ActivityIndicator/);
     }

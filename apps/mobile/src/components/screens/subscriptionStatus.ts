@@ -3,14 +3,13 @@
  *
  * ## Why this did not exist
  *
- * `useIsPremium` appeared exactly once in the whole Profile tree, inside
- * FamilyPlanScreen. The Account screen — whose section header is the word
- * "Subscription" — offered Family Plan and Restore Purchases and nothing else:
- * no tier, no renewal date, no upgrade. So a subscriber had no way to confirm
- * they were subscribed, and someone who wanted to pay had no way to do it from
- * the account area at all. The paywall was reachable only by being turned away
- * from something mid-session, which is the one moment a person is least
- * inclined to read it.
+ * The Account screen — whose section header is the word "Subscription" —
+ * offered a Restore Purchases row and nothing else: no tier, no renewal date,
+ * no upgrade. `useIsPremium` was not read anywhere on it. So a subscriber had
+ * no way to confirm they were subscribed, and someone who wanted to pay had no
+ * way to do it from the account area at all. The paywall was reachable only by
+ * being turned away from something mid-session, which is the one moment a
+ * person is least inclined to read it.
  *
  * A pure function because the mobile suite is logic-only: a sentence chosen
  * inside JSX is a sentence nothing can check. Same reasoning as
@@ -28,8 +27,6 @@ export interface SubscriptionStatus {
   showUpgrade: boolean;
   /** Whether "Restore purchases" is worth offering. */
   showRestore: boolean;
-  /** Whether the Family Plan row can do anything yet. */
-  familyPlanAvailable: boolean;
 }
 
 /**
@@ -50,7 +47,6 @@ export function subscriptionStatus(ent: Entitlements | null | undefined): Subscr
       // already be paying is the exact insult this audit started from.
       showUpgrade: false,
       showRestore: true,
-      familyPlanAvailable: false,
     };
   }
 
@@ -62,7 +58,6 @@ export function subscriptionStatus(ent: Entitlements | null | undefined): Subscr
       // The point of Restore for a free-reading account: a subscriber on a new
       // phone, or after a reinstall, lands here looking exactly like this.
       showRestore: true,
-      familyPlanAvailable: false,
     };
   }
 
@@ -85,7 +80,6 @@ export function subscriptionStatus(ent: Entitlements | null | undefined): Subscr
     // plainly ("Your subscription is already active"), so the row would only
     // ever be a way to read that sentence.
     showRestore: false,
-    familyPlanAvailable: true,
   };
 }
 

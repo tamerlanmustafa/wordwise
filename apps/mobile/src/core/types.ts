@@ -21,7 +21,6 @@ export type Screen =
   | 'watched'
   | 'achievements'
   | 'leaderboard'
-  | 'familyPlan'
   | 'privacy'
   | 'terms'
   | 'learnedWords'

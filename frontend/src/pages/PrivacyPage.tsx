@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last updated: August 26, 2026
+        Last updated: September 13, 2026
       </Typography>
 
       <Section title="1. Information We Collect">
@@ -23,26 +23,26 @@ export default function PrivacyPage() {
 
       <Section title="2. How We Use Your Information">
         Your data is used to: provide and improve the WordWise service, personalize vocabulary
-        recommendations, power spaced-repetition scheduling, display relevant advertisements
-        (free tier), and communicate with you about your account.
+        recommendations, power spaced-repetition scheduling, and communicate with you about
+        your account.
       </Section>
 
       <Section title="3. Data Sharing">
-        We do not sell your personal data. We share data with: Google (for authentication),
-        DeepL (for translations — only the text being translated), and AdMob (for serving ads
-        to free-tier users — device identifiers only, no personal data). Leaderboard data
-        (username and aggregate stats only) is visible to other users.
+        We do not sell your personal data. We share data with: Google and Apple (for
+        authentication, if you sign in with them), and our translation providers (only the text
+        being translated — never your identity). Leaderboard data (username and aggregate stats
+        only) is visible to other users.
       </Section>
 
       <Section title="4. Data Retention">
-        Your account data is retained as long as your account is active. You can request deletion
-        of your account and all associated data by contacting support.
+        Your account data is retained as long as your account is active. You can permanently
+        delete your account and everything saved to it from the app (Profile → Account → Delete
+        account); you may also contact us at privacy@getwordwise.us.
       </Section>
 
       <Section title="5. Advertising">
-        Free-tier users see banner advertisements served by Google AdMob. We use non-personalized
-        ads for users under 16 or in regions where personalized advertising is restricted.
-        Premium subscribers see no advertisements.
+        WordWise does not show advertisements and contains no advertising or analytics SDKs.
+        We do not share device identifiers with advertising networks.
       </Section>
 
       <Section title="6. Children's Privacy">
@@ -51,8 +51,9 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="7. Your Rights">
-        You have the right to access, correct, or delete your personal data. You may also opt out
-        of personalized advertising. To exercise these rights, contact us at privacy@getwordwise.us.
+        You have the right to access, correct, or delete your personal data. Deletion is available
+        in the app at any time (Profile → Account → Delete account). To exercise the other rights,
+        contact us at privacy@getwordwise.us.
       </Section>
 
       <Section title="8. Contact">

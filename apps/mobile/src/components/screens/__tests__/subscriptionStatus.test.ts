@@ -2,10 +2,8 @@
  * What the Account screen says about what you have.
  *
  * The section was headed "Subscription" and said nothing about one: no tier,
- * no renewal, no upgrade. `useIsPremium` appeared exactly once in the entire
- * Profile tree and not here, so a subscriber could not confirm they were
- * subscribed and someone who wanted to pay could not do it from the account
- * area at all.
+ * no renewal, no upgrade. A subscriber could not confirm they were subscribed
+ * and someone who wanted to pay could not do it from the account area at all.
  *
  * The case worth reading first is `unknown`. Everything else in the app treats
  * a missing entitlement as "free", which is right for a *gate* (fail closed)
@@ -59,12 +57,6 @@ describe('a free account', () => {
     expect(free.showRestore).toBe(true);
   });
 
-  it('cannot reach the family plan', () => {
-    // The screen behind it requires Plus, so a row that leads to "you need
-    // Plus" is a row that wastes a tap.
-    expect(free.familyPlanAvailable).toBe(false);
-  });
-
   it('shows no renewal date', () => {
     expect(free.expiresAt).toBeNull();
   });
@@ -88,10 +80,6 @@ describe('a paying account', () => {
     // Nothing to restore. The row's only possible outcome was the server
     // replying "your subscription is already active".
     expect(plus.showRestore).toBe(false);
-  });
-
-  it('can reach the family plan', () => {
-    expect(plus.familyPlanAvailable).toBe(true);
   });
 });
 

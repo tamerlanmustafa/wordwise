@@ -23,7 +23,6 @@ import { useReminderStore } from '../stores/reminderStore';
 import { track } from '../services/analytics';
 import { AchievementsScreen } from '../components/AchievementsScreen';
 import { LeaderboardScreen } from '../components/LeaderboardScreen';
-import { FamilyPlanScreen } from '../components/FamilyPlanScreen';
 import { PrivacyScreen } from '../components/PrivacyScreen';
 import { QuizJourneyScreen } from '../components/QuizJourneyScreen';
 import { QuizLessonScreen } from '../components/QuizLessonScreen';
@@ -463,10 +462,6 @@ export default function App() {
 
 
 
-
-  const navigateToFamilyPlan = () => {
-    setCurrentScreen('familyPlan');
-  };
 
   const navigateToPrivacy = () => {
     setCurrentScreen('privacy');
@@ -1038,7 +1033,6 @@ export default function App() {
       case 'learnedWords':
       case 'lists':
       case 'admin':
-      case 'familyPlan':
       case 'privacy':
       case 'terms':
       case 'savedMovies':
@@ -1089,7 +1083,6 @@ export default function App() {
           ) : screen === 'account' ? (
             <AccountScreen
               onBack={backFrom('account')}
-              onNavigateToFamilyPlan={navigateToFamilyPlan}
               // `reason: null` — the paywall's own type already documents this
               // case as "just browsing the upgrade (a Settings tap, an upsell
               // row)". It was the only reason with no entry point: the paywall
@@ -1156,8 +1149,6 @@ export default function App() {
             <AchievementsScreen onBack={backFrom('achievements')} backLabel={backLabelFor('achievements')} />
           ) : screen === 'leaderboard' ? (
             <LeaderboardScreen onBack={backFrom('leaderboard')} backLabel={backLabelFor('leaderboard')} />
-          ) : screen === 'familyPlan' ? (
-            <FamilyPlanScreen onBack={backFrom('familyPlan')} backLabel={backLabelFor('familyPlan')} userId={user!.id} />
           ) : screen === 'privacy' ? (
             <PrivacyScreen onBack={backFrom('privacy')} backLabel={backLabelFor('privacy')} mode="privacy" />
           ) : screen === 'terms' ? (

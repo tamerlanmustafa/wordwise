@@ -9,12 +9,12 @@
  *
  * ## The Subscription section used to say nothing about a subscription
  *
- * It held Family Plan and Restore Purchases and no status at all — no tier, no
- * renewal, no upgrade. `useIsPremium` appeared exactly once in the entire
- * Profile tree, and not here. So a subscriber could not confirm they were
- * subscribed, and someone who wanted to pay could not do it from the account
- * area: the paywall was reachable only by being turned away from something
- * mid-session, which is the moment a person is least inclined to read it.
+ * It held a Restore Purchases row and no status at all — no tier, no renewal,
+ * no upgrade. `useIsPremium` appeared exactly once in the entire Profile tree,
+ * and not here. So a subscriber could not confirm they were subscribed, and
+ * someone who wanted to pay could not do it from the account area: the paywall
+ * was reachable only by being turned away from something mid-session, which is
+ * the moment a person is least inclined to read it.
  *
  * The rows are now driven by `subscriptionStatus`, which decides what to show
  * from the entitlement — including the case where the entitlement is not known
@@ -39,11 +39,10 @@ import { formatRenewal, subscriptionStatus } from './subscriptionStatus';
 
 interface Props {
   onBack: () => void;
-  onNavigateToFamilyPlan: () => void;
   onNavigateToPaywall: () => void;
 }
 
-export function AccountScreen({ onBack, onNavigateToFamilyPlan, onNavigateToPaywall }: Props) {
+export function AccountScreen({ onBack, onNavigateToPaywall }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
@@ -139,9 +138,6 @@ export function AccountScreen({ onBack, onNavigateToFamilyPlan, onNavigateToPayw
                 description={t('settings:upgradeToPlusDesc')}
                 onPress={onNavigateToPaywall}
               />
-            ) : null}
-            {status.familyPlanAvailable ? (
-              <LinkRow label={t('settings:familyPlan')} onPress={onNavigateToFamilyPlan} />
             ) : null}
             {status.showRestore ? (
               <LinkRow

@@ -26,8 +26,7 @@ describe('tabOf', () => {
   });
 
   it('walks the parent chain to a root', () => {
-    // familyPlan → account → profile, two hops.
-    expect(tabOf('familyPlan')).toBe('profile');
+    // privacy → legal → profile, two hops.
     expect(tabOf('privacy')).toBe('profile');
     expect(tabOf('listDetail')).toBe('lists');
   });

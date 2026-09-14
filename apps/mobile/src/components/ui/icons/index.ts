@@ -34,7 +34,6 @@ export {
   BlockIcon,
   BrainIcon,
   ChartIcon,
-  FamilyIcon,
   LevelDot,
   LEVEL_DOT_COLORS,
   type AppIconProps,

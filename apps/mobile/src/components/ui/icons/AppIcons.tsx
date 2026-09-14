@@ -304,30 +304,6 @@ export function ChartIcon({ size = 20, color, style }: AppIconProps) {
 }
 
 // ---------------------------------------------------------------------------
-// FamilyIcon — 👨‍👩‍👧‍👦 (the family plan)
-// ---------------------------------------------------------------------------
-
-export function FamilyIcon({ size = 44, color, style }: AppIconProps) {
-  const tc = useThemeColors();
-  const ink = color ?? tc.primaryOnSurface;
-  return (
-    <View style={[{ width: size, height: size }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        {/* two adults behind, two children in front */}
-        <Circle cx={7.4} cy={6.4} r={2.9} fill={ink} fillOpacity={0.9} />
-        <Path d="M2.2 17.4a5.2 5.2 0 0 1 10.4 0z" fill={ink} fillOpacity={0.9} />
-        <Circle cx={16.6} cy={6.4} r={2.9} fill={ink} fillOpacity={0.65} />
-        <Path d="M11.4 17.4a5.2 5.2 0 0 1 10.4 0z" fill={ink} fillOpacity={0.65} />
-        <Circle cx={9.2} cy={15.2} r={2} fill={ink} />
-        <Path d="M5.6 22.2a3.6 3.6 0 0 1 7.2 0z" fill={ink} />
-        <Circle cx={15.2} cy={15.8} r={1.7} fill={ink} fillOpacity={0.8} />
-        <Path d="M12.2 22.2a3.1 3.1 0 0 1 6.2 0z" fill={ink} fillOpacity={0.8} />
-      </Svg>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // LevelDot — 🟢 🟡 🟠 🔴 (the CEFR filter chips)
 // ---------------------------------------------------------------------------
 

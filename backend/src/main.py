@@ -14,7 +14,7 @@ from .database import connect_db, disconnect_db
 from .logging_config import configure_logging
 from .middleware import HTTPCacheMiddleware, RequestIDMiddleware
 from .utils.rate_limit import GlobalRateLimitMiddleware
-from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, family_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router, surveys_router
+from .routes import auth_router, movies_router, oauth_router, apple_oauth_router, scripts_router, cefr_router, translation_router, tmdb_router, user_words_router, admin_router, enrichment_router, reports_router, upload_router, books_router, interactions_router, srs_router, premium_router, feature_flags_router, billing_router, gamification_router, social_router, student_discount_router, quiz_router, reel_router, daily_router, consumables_router, lists_router, surveys_router
 from .services import fetch_movie_script
 from .services.event_loop_lag import start_watchdog
 import asyncio
@@ -147,7 +147,6 @@ app.include_router(srs_router)
 app.include_router(premium_router)
 app.include_router(feature_flags_router)
 app.include_router(billing_router)
-app.include_router(family_router)
 app.include_router(gamification_router)
 app.include_router(social_router)
 app.include_router(student_discount_router)

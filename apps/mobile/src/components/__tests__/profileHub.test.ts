@@ -74,8 +74,11 @@ describe('the hub reaches all four destinations', () => {
 
 describe('what moved off Settings stayed reachable', () => {
   it('subscription lives on Account', () => {
+    // Family Plan was removed outright — it was never a feature we wanted.
+    // What has to stay reachable here is the tier itself and the way back
+    // into a purchase made elsewhere.
     const account = read('components', 'screens', 'AccountScreen.tsx');
-    expect(account).toMatch(/settings:familyPlan/);
+    expect(account).toMatch(/settings:currentPlan/);
     expect(account).toMatch(/settings:restorePurchases/);
   });
 

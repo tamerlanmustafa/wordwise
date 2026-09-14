@@ -1,24 +1,4 @@
 {
-  "family": {
-    "create": "Aile Paketi Oluştur",
-    "createFailed": "Aile planı oluşturulamadı",
-    "emailPlaceholder": "E-posta adresi",
-    "errorTitle": "Hata",
-    "invite": "Üye davet et",
-    "inviteFailed": "Üye davet edilemedi",
-    "leave": "Aile Planından Çık",
-    "leaveBody": "Premium erişimini kaybedeceksin. Devam etmek istiyor musun?",
-    "leaveTitle": "Aile planından çık",
-    "members": "Üyeler",
-    "owner": "Sahibi",
-    "ownersPlan": "{{email}}'in Planı",
-    "remove": "Kaldır",
-    "removeMember": "Üyeyi kaldır",
-    "removeMemberBody": "{{email}} adresini aile planından çıkarmak ister misin?",
-    "requiresPlus": "Etkin bir WordWise Plus aboneliği gerektirir.",
-    "title": "Aile Paketi",
-    "yourPlan": "Aile Planın"
-  },
   "paywall": {
     "alreadyPlus": "WordWise Plus'tasın — tüm özellikler açık. Teşekkürler!",
     "notFoundTitle": "Bulunamadı",

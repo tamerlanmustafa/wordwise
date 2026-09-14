@@ -53,7 +53,7 @@
   },
   "usernameStep": {
     "title": "What should we call you?",
-    "sub": "Your username shows up on leaderboards and in your family plan. You can change it any time in Settings.",
+    "sub": "Your username shows up on leaderboards. You can change it any time in Settings.",
     "placeholder": "Username",
     "saving": "Saving…",
     "saveFailed": "Could not save the username. Please try again."

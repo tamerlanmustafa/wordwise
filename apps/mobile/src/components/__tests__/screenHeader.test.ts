@@ -81,7 +81,6 @@ describe('ScreenHeader', () => {
       'NotebookScreen.tsx',
       'StatsScreen.tsx',
       'AchievementsScreen.tsx',
-      'FamilyPlanScreen.tsx',
       'SavedMoviesScreen.tsx',
       'LeaderboardScreen.tsx',
       path.join('screens', 'WatchedScreen.tsx'),

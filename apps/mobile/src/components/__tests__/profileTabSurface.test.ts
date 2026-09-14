@@ -88,17 +88,3 @@ describe('every translation language is offered', () => {
   });
 });
 
-describe('Family Plan renders in the app theme', () => {
-  const FAMILY = path.join(COMPONENTS, 'FamilyPlanScreen.tsx');
-
-  it('reads theme tokens instead of a frozen palette', () => {
-    // It shipped with its own `COLORS` object of literal hex values, so in
-    // dark mode it was a white sheet with near-black text — the only screen
-    // in the Profile tree that did not turn over.
-    expect(read(FAMILY)).toMatch(/useThemeColors/);
-  });
-
-  it('declares no local colour constant of its own', () => {
-    expect(read(FAMILY)).not.toMatch(/^const COLORS = \{/m);
-  });
-});

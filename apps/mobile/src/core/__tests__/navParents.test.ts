@@ -29,9 +29,8 @@ describe('PARENT_OF', () => {
 
   it('returns each sub-screen to the page that links it, not Home', () => {
     // The original bug was that these dropped the user on Home. They have
-    // since moved off Settings — subscription onto Account, the two documents
-    // onto Legal — so the parents moved with them.
-    expect(PARENT_OF.familyPlan).toBe('account');
+    // since moved off Settings — the two documents onto Legal — so the
+    // parents moved with them.
     expect(PARENT_OF.privacy).toBe('legal');
     expect(PARENT_OF.terms).toBe('legal');
   });

@@ -35,9 +35,8 @@ export const PARENT_OF: Partial<Record<Screen, BackTarget>> = {
   admin: 'profile',
   // The saved reel lost its tab to Explore and now hangs off Profile.
   savedMovies: 'profile',
-  // Subscription lives on Account; the two documents live on Legal. Back steps
-  // into the page that linked here, not out to Home.
-  familyPlan: 'account',
+  // The two documents live on Legal. Back steps into the page that linked
+  // here, not out to Home.
   privacy: 'legal',
   terms: 'legal',
   // Second-level lists, reached from their parent list screen.

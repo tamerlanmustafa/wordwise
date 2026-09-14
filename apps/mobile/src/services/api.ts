@@ -2141,57 +2141,6 @@ export const billingApi = {
 };
 
 // =====================================================================
-// Family Plan
-// =====================================================================
-
-export interface FamilyPlan {
-  plan_id: number;
-  owner_id: number;
-  owner_email: string;
-  max_members: number;
-  members: Array<{ user_id: number; email: string; username: string; joined_at: string }>;
-}
-
-export const familyApi = {
-  getPlan: async (): Promise<FamilyPlan | null> => {
-    const res = await authFetch(`${API_BASE_URL}/family/plan`);
-    if (!res.ok) return null;
-    return res.json();
-  },
-
-  createPlan: async (): Promise<FamilyPlan> => {
-    const res = await authFetch(`${API_BASE_URL}/family/create`, { method: 'POST' });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Create family plan failed: ${res.status} ${text.slice(0, 120)}`);
-    }
-    return res.json();
-  },
-
-  inviteMember: async (email: string): Promise<{ success: boolean; message: string }> => {
-    const res = await authFetch(`${API_BASE_URL}/family/invite`, {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(text || 'Invite failed');
-    }
-    return res.json();
-  },
-
-  removeMember: async (userId: number): Promise<void> => {
-    const res = await authFetch(`${API_BASE_URL}/family/remove/${userId}`, { method: 'POST' });
-    if (!res.ok) throw new Error('Remove failed');
-  },
-
-  leave: async (): Promise<void> => {
-    const res = await authFetch(`${API_BASE_URL}/family/leave`, { method: 'POST' });
-    if (!res.ok) throw new Error('Leave failed');
-  },
-};
-
-// =====================================================================
 // Gamification / Achievements
 // =====================================================================
 
