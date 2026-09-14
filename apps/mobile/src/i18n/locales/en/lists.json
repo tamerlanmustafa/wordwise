@@ -57,11 +57,24 @@
     "words": "Add words from Explore."
   },
   "error": {
-    "retry": "Couldn't refresh. Tap to try again."
+    "retry": "Couldn't refresh. Tap to try again.",
+    "removeFailed": "Couldn't remove that. Please try again.",
+    "addFailed": "Couldn't add that. Please try again.",
+    "deleteFailed": "Couldn't delete that list. Please try again.",
+    "renameFailed": "Couldn't rename that list. Please try again."
   },
   "srs": {
     "new": "new",
     "learning": "learning",
     "learned": "learned"
+  },
+  "removed": {
+    "fromList": "Removed from {{name}}"
+  },
+  "a11y": {
+    "options": "List options",
+    "sort": "Sort",
+    "removeFromList": "Remove {{item}} from this list",
+    "unfavourite": "Remove {{item}} from Favourites"
   }
 }

@@ -13,6 +13,15 @@
  * The overflow button is absent entirely on the two pinned lists rather than
  * present-and-disabled: there is nothing behind it for them, and a dead
  * button invites a tap that does nothing.
+ *
+ * ## Every removal can be undone
+ *
+ * Removing an item used to be one silent tap: the row vanished, the request
+ * went out, and nothing on the screen could bring it back. On a list the user
+ * made, the control that did it was an empty heart — which reads as "favourite
+ * this" — so the words people were trying to keep were the ones they deleted.
+ * Removals now go through `removeItemWithUndo`: the row goes at once, the
+ * delete waits out the toast, and Undo puts the item back exactly where it was.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,6 +31,8 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { BackButton } from '../common/BackButton';
 import { SortSheet } from '../lists/SortSheet';
+import { ListActionsSheet } from '../lists/ListActionsSheet';
+import { NewListSheet } from '../lists/NewListSheet';
 import { FilmItemRow, ListItemsSkeleton, WordItemRow } from '../lists/ListItemRows';
 import { useListDisplayName } from '../lists/ListRow';
 import {
@@ -31,10 +42,16 @@ import {
   listName,
   metaText,
 } from '../lists/listStyles';
-import { useListsStore } from '../../stores/listsStore';
+import { REMOVE_UNDO_MS, useListsStore } from '../../stores/listsStore';
 import { showConfirm } from '../../stores/confirmStore';
 import { showToast } from '../../stores/toastStore';
 import { track } from '../../services/analytics';
+import {
+  ConnectionError,
+  ConnectionStrip,
+  SlowConnectionStrip,
+} from '../common/ConnectionError';
+import { useSlowConnection } from '../../hooks/useSlowConnection';
 import type {
   ListFilmItem,
   ListSort,
@@ -61,8 +78,10 @@ export function ListDetailScreen({
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   const detail = useListsStore((st) => st.byId[list.id]);
+  const indexRow = useListsStore((st) => st.lists.find((l) => l.id === list.id));
+  const failure = useListsStore((st) => st.detailFailure[list.id] ?? null);
   const fetchDetail = useListsStore((st) => st.fetchDetail);
-  const removeItem = useListsStore((st) => st.removeItem);
+  const removeItemWithUndo = useListsStore((st) => st.removeItemWithUndo);
   const destroy = useListsStore((st) => st.destroy);
   const rename = useListsStore((st) => st.rename);
 
@@ -72,14 +91,19 @@ export function ListDetailScreen({
   // one its owner recognises.
   const [sort, setSort] = useState<ListSort>('added');
   const [sortOpen, setSortOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
-  // The summary on the store is fresher than the one we were handed.
-  const summary = detail?.summary ?? list;
+  // Freshest first: the open page's own summary, then the index row (kept
+  // current by every mutation), and only then the copy handed over at
+  // navigation time, which is frozen at the moment of the tap.
+  const summary = detail?.summary ?? indexRow ?? list;
   const name = useListDisplayName(summary);
   const isSystem = summary.systemKey !== null;
   const isFilms = summary.kind === 'films';
 
-  useEffect(() => { void fetchDetail(list.id, sort); }, [fetchDetail, list.id, sort]);
+  const load = useCallback(() => { void fetchDetail(list.id, sort); }, [fetchDetail, list.id, sort]);
+  useEffect(() => { load(); }, [load]);
 
   const meta = useMemo(() => {
     const parts: string[] = [];
@@ -100,16 +124,39 @@ export function ListDetailScreen({
       confirmLabel: t('delete.confirm'),
       tone: 'destructive',
       onConfirm: () => {
-        void destroy(list.id);
-        track('list_deleted');
+        // Leave at once — the list is already gone from the index — but only
+        // SAY it is deleted once the server agrees. This toast used to fire
+        // before the request resolved, so a failed delete read "List deleted",
+        // then "Couldn't delete that list", and the list came back.
         onBack();
-        showToast({ message: t('delete.done'), tone: 'success' });
+        void destroy(list.id).then((deleted) => {
+          if (!deleted) return; // the store has already said why
+          track('list_deleted');
+          showToast({ message: t('delete.done'), tone: 'success' });
+        });
       },
     });
   }, [destroy, list.id, onBack, t]);
 
+  /** Remove one item, with an Undo that lasts exactly as long as the toast. */
+  const removeWithUndo = useCallback(
+    (key: number | string) => {
+      const undo = removeItemWithUndo(list.id, key);
+      showToast({
+        message: t('removed.fromList', { name }),
+        actionLabel: t('delete.undo'),
+        onAction: undo,
+        duration: REMOVE_UNDO_MS,
+      });
+    },
+    [removeItemWithUndo, list.id, name, t],
+  );
+
   const items = detail?.items ?? [];
-  const loading = !detail;
+  const loading = !detail && !failure;
+  // Only while there is nothing to show — a slow refresh behind rows the
+  // reader can already see is not worth a banner.
+  const slow = useSlowConnection(loading);
 
   return (
     <TopInsetView style={s.container}>
@@ -118,9 +165,20 @@ export function ListDetailScreen({
             a fourth variant of the same affordance. */}
         <BackButton onPress={onBack} />
 
-        {/* Absent, not disabled, on the pinned lists. */}
+        {/* Absent, not disabled, on the pinned lists — there is nothing to
+            rename or delete there.
+
+            Opens options, as "⋯" promises everywhere else. It used to go
+            straight to "Delete this list?", which put the tab's only
+            destructive action behind the glyph people tap to look around. */}
         {isSystem ? <View style={{ width: METRICS.circleBtn }} /> : (
-          <TouchableOpacity style={s.circleBtn} onPress={confirmDelete} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={s.circleBtn}
+            onPress={withTap(() => setActionsOpen(true))}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('a11y.options')}
+          >
             <Text style={s.circleGlyph}>⋯</Text>
           </TouchableOpacity>
         )}
@@ -140,11 +198,30 @@ export function ListDetailScreen({
           reader and the session-credit rules. A list is a collection you
           revise from, not a quiz. */}
       <View style={s.actionRow}>
-        <TouchableOpacity style={s.sortBtn} onPress={withTap(() => setSortOpen(true))} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={s.sortBtn}
+          onPress={withTap(() => setSortOpen(true))}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.sort')}
+        >
           <Text style={s.circleGlyph}>⇅</Text>
         </TouchableOpacity>
       </View>
 
+      {/* A refresh that failed behind items already on screen: say so, keep
+          them. Only when there IS a page — without one, the full view below
+          takes the whole body instead. */}
+      {detail && failure ? <ConnectionStrip failure={failure} onRetry={load} /> : null}
+      {slow ? <SlowConnectionStrip /> : null}
+
+      {!detail && failure ? (
+        // Nothing to show and the request failed. This used to be the skeleton
+        // for ever: "loading" was simply "no page yet", so a list opened
+        // offline shimmered with no error and no retry — measured at 15s and
+        // still going.
+        <ConnectionError failure={failure} onRetry={load} />
+      ) : (
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: bottomOffset + 24 }]}
@@ -161,8 +238,8 @@ export function ListDetailScreen({
             <FilmItemRow
               key={item.tmdbId}
               item={item}
-              inList
-              onToggle={() => void removeItem(list.id, item.tmdbId)}
+              // Bare: the row wraps it.
+              onRemove={() => removeWithUndo(item.tmdbId)}
               onPress={withTap(() => onOpenFilm(item))}
             />
           ))
@@ -171,14 +248,17 @@ export function ListDetailScreen({
             <WordItemRow
               key={item.word}
               item={item}
-              // Inside Favourites every row is by definition favourited, so
-              // the heart is the remove control.
-              favourite={summary.systemKey === 'favourites'}
-              onToggleFavourite={() => void removeItem(list.id, item.word)}
+              // A heart only where it means Favourites. On a list the user made
+              // this used to be an EMPTY heart — "favourite this" — whose tap
+              // deleted the word from the list. See WordItemRow.
+              control={summary.systemKey === 'favourites' ? 'favourite' : 'member'}
+              // Bare: the row wraps it.
+              onRemove={() => removeWithUndo(item.word)}
             />
           ))
         )}
       </ScrollView>
+      )}
 
       <SortSheet
         visible={sortOpen}
@@ -188,6 +268,27 @@ export function ListDetailScreen({
         value={sort}
         onChange={setSort}
       />
+
+      {isSystem ? null : (
+        <>
+          <ListActionsSheet
+            visible={actionsOpen}
+            onClose={() => setActionsOpen(false)}
+            bottomOffset={bottomOffset}
+            title={name}
+            onRename={() => setRenameOpen(true)}
+            onDelete={confirmDelete}
+          />
+          <NewListSheet
+            mode="rename"
+            visible={renameOpen}
+            onClose={() => setRenameOpen(false)}
+            bottomOffset={bottomOffset}
+            initialName={summary.name}
+            onRename={(next) => rename(list.id, next)}
+          />
+        </>
+      )}
     </TopInsetView>
   );
 }

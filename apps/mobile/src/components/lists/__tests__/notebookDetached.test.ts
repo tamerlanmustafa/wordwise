@@ -67,7 +67,13 @@ describe('the saved-words notebook is detached', () => {
 
     expect(wordRow).not.toContain('onPress={onPress}');
     expect(wordRow).toContain('<View style={s.wordRow}>');
-    expect(wordRow).toContain('onPress={onToggleFavourite}');
+    // The control was a heart wired to `onToggleFavourite` on every list —
+    // which on a custom list meant an empty heart that deleted the word. It is
+    // now a heart on Favourites and a check elsewhere, both removing through
+    // `onRemove`. What this guard exists for is unchanged: the row still HAS a
+    // real control.
+    expect(wordRow).toContain('onPress={withTap(onRemove)}');
+    expect(wordRow).toContain('<RemoveCheck');
   });
 
   it('drops the copy it was the only user of', () => {

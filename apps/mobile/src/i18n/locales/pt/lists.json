@@ -57,11 +57,24 @@
     "words": "Adiciona palavras a partir de Explorar."
   },
   "error": {
-    "retry": "Não foi possível atualizar. Toca para tentar de novo."
+    "retry": "Não foi possível atualizar. Toca para tentar de novo.",
+    "removeFailed": "Não foi possível remover. Tente novamente.",
+    "addFailed": "Não foi possível adicionar. Tente novamente.",
+    "deleteFailed": "Não foi possível excluir a lista. Tente novamente.",
+    "renameFailed": "Não foi possível renomear a lista. Tente novamente."
   },
   "srs": {
     "new": "nova",
     "learning": "a aprender",
     "learned": "aprendida"
+  },
+  "removed": {
+    "fromList": "Removido de {{name}}"
+  },
+  "a11y": {
+    "options": "Opções da lista",
+    "sort": "Ordenar",
+    "removeFromList": "Remover {{item}} desta lista",
+    "unfavourite": "Remover {{item}} dos Favoritos"
   }
 }

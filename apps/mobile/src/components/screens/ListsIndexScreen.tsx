@@ -83,7 +83,6 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
   const setActiveKind = useListsStore((st) => st.setActiveKind);
   const hydrate = useListsStore((st) => st.hydrate);
   const fetchLists = useListsStore((st) => st.fetchLists);
-  const syncFromReel = useListsStore((st) => st.syncFromReel);
   const create = useListsStore((st) => st.create);
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -91,15 +90,27 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
 
   useEffect(() => { void hydrate(); }, [hydrate]);
 
-  // `Saved from Home` is reel-backed, so it can go stale while the user is
-  // on Home. Re-read it on focus, and keep it live via the reel subscription
-  // for adds that happen while the tab is already open.
+  // Re-read the whole index on focus, and keep the reel row live while the tab
+  // is already open.
+  //
+  // This used to re-read ONLY the reel row. Every other list can change while
+  // the user is elsewhere too — the heart on Home writes Favourites, a list can
+  // be created on another device — so Favourites read 7 while the server said
+  // 8, and a new list never appeared until the app was restarted. For a new
+  // user that meant saving their first word and coming back to a Favourites
+  // row that still said "nothing saved yet".
+  //
+  // Cheap to do on every focus: the index is 8 queries and ~10KB at the cap,
+  // and `fetchLists` reconciles rather than replaces, so a refresh that finds
+  // nothing new hands FlatList the same array and re-renders nothing.
   useEffect(() => {
     if (!active) return;
     track('lists_tab_opened');
-    void syncFromReel();
+    // Skip the very first activation: `hydrate` is already fetching, and two
+    // concurrent index reads would race to set the same state.
+    if (useListsStore.getState().hydrated) void fetchLists();
     return subscribeToReel();
-  }, [active, syncFromReel]);
+  }, [active, fetchLists]);
 
   const films = useMemo(() => lists.filter((l) => l.kind === 'films'), [lists]);
   const words = useMemo(() => lists.filter((l) => l.kind === 'words'), [lists]);

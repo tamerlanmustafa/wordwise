@@ -16,23 +16,40 @@ import { META_SEPARATOR, metaText } from './listStyles';
 import type { ListFilmItem, ListWordItem } from '../../core/types';
 import { Skeleton } from '../ui/Skeleton';
 import { HeartIcon, StarIcon } from '../ui/icons';
+import { withTap } from '../../utils/feedback';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w185';
 
 /**
- * A film in an open list. The round button on the end holds a gold check;
- * tapping removes the film and the button becomes an outlined plus — so the
- * removal is reversible in place, and no undo toast is needed.
+ * Enough invisible slop to make a small round control a 44pt target.
+ *
+ * The check is 28pt and the heart 34pt — both sat at the edge of a row whose
+ * body is itself pressable (a film row opens the film), so a thumb aiming at
+ * the film and landing a few points right removed it instead.
+ */
+const hitSlopFor = (size: number) => {
+  const pad = Math.max(0, Math.ceil((44 - size) / 2));
+  return { top: pad, bottom: pad, left: pad, right: pad };
+};
+
+/**
+ * A film in an open list. The round button on the end holds a gold check, and
+ * tapping it removes the film from the list — with an Undo in the toast.
+ *
+ * This comment used to promise that the button "becomes an outlined plus — so
+ * the removal is reversible in place, and no undo toast is needed". Nothing
+ * ever drew that plus: the screen hid the item the moment it was removed, so
+ * the row simply vanished and there was no way back. The reversibility now
+ * lives in the toast, where it actually exists.
  */
 export function FilmItemRow({
   item,
-  inList,
-  onToggle,
+  onRemove,
   onPress,
 }: {
   item: ListFilmItem;
-  inList: boolean;
-  onToggle: () => void;
+  /** Bare — the row wraps it, so the parent must not. */
+  onRemove: () => void;
   onPress: () => void;
 }) {
   const { t } = useTranslation('lists');
@@ -70,49 +87,90 @@ export function FilmItemRow({
         ) : null}
       </View>
 
-      <TouchableOpacity
-        style={[
-          s.stateBtn,
-          inList
-            ? { backgroundColor: tc.goldWash, borderColor: 'transparent' }
-            : { borderColor: tc.goldLine },
-        ]}
-        onPress={onToggle}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityState={{ selected: inList }}
-      >
-        <Text style={[s.stateGlyph, { color: tc.goldOnSurface }]}>
-          {inList ? '✓' : '+'}
-        </Text>
-      </TouchableOpacity>
+      <RemoveCheck
+        onPress={onRemove}
+        label={t('a11y.removeFromList', { item: item.title })}
+        tc={tc}
+        s={s}
+      />
     </TouchableOpacity>
   );
 }
 
 /**
- * A word in an open list. The heart toggles Favourites and is silent — no
- * toast — exactly as it is in Explore, because the fill state is the
- * feedback and a toast per tap would be noise while skimming a list.
+ * The trailing control on a list item that means "in this list".
+ *
+ * The same gold check on films and words, so a row's control says the same
+ * thing wherever it appears: this is in the list, and tapping takes it out.
+ * Its own accessible button — nested inside the film row's pressable body it
+ * used to be merged into the row's single element, so VoiceOver had no way to
+ * reach it on its own.
+ */
+function RemoveCheck({
+  onPress,
+  label,
+  tc,
+  s,
+}: {
+  onPress: () => void;
+  label: string;
+  tc: ThemeColors;
+  s: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <TouchableOpacity
+      style={[s.stateBtn, { backgroundColor: tc.goldWash, borderColor: 'transparent' }]}
+      onPress={withTap(onPress)}
+      hitSlop={hitSlopFor(28)}
+      activeOpacity={0.7}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[s.stateGlyph, { color: tc.goldOnSurface }]}>✓</Text>
+    </TouchableOpacity>
+  );
+}
+
+/**
+ * A word in an open list.
+ *
+ * ## What the trailing control is depends on the list — and it used to lie
+ *
+ * On EVERY words list this drew a heart, filled only when the list was
+ * Favourites, and on every list its tap removed the word. On a list the user
+ * made — "Travel" — that meant an empty outline heart, which reads as
+ * "favourite this", whose tap silently deleted the word from Travel instead.
+ * No confirmation, no toast, no undo, and no add button on the screen to put
+ * it back. It was also empty on words that WERE favourites, because the fill
+ * came from which list was open rather than from the word.
+ *
+ * So the control is now named for what it does:
+ *
+ *  • `favourite` — Favourites itself. A filled heart; tapping un-hearts, which
+ *    is what a filled heart promises.
+ *  • `member`    — any other words list. The gold check films already use:
+ *    "in this list", tap to take it out.
+ *
+ * Either way the removal carries an Undo, owned by the screen.
  *
  * The row body is deliberately NOT pressable. It used to be, and tapping a
  * word threw the user out of the list they were reading and into the old
  * saved-words notebook — every saved word, unfiltered, with no relationship
- * to the word tapped or the list it was in. That view is gone (see the delete
- * in this change), and rather than find the row somewhere else to go, the row
- * simply stops claiming it goes anywhere. A control that looks tappable and
- * does nothing is worse than one that never offered.
- *
- * The heart is still a real button, and is now the only one here.
+ * to the word tapped or the list it was in. That view is gone, and rather than
+ * find the row somewhere else to go, the row simply stops claiming it goes
+ * anywhere. A control that looks tappable and does nothing is worse than one
+ * that never offered.
  */
 export function WordItemRow({
   item,
-  favourite,
-  onToggleFavourite,
+  control,
+  onRemove,
 }: {
   item: ListWordItem;
-  favourite: boolean;
-  onToggleFavourite: () => void;
+  control: 'favourite' | 'member';
+  /** Bare — the row wraps it, so the parent must not. */
+  onRemove: () => void;
 }) {
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
@@ -134,15 +192,26 @@ export function WordItemRow({
         <Text style={s.wordSub} numberOfLines={1}>{sub}</Text>
       </View>
 
-      <TouchableOpacity
-        style={[s.heartBtn, favourite && { backgroundColor: tc.goldWash }]}
-        onPress={onToggleFavourite}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityState={{ selected: favourite }}
-      >
-        <HeartIcon size={19} filled={favourite} color={favourite ? tc.gold : tc.textFaint} />
-      </TouchableOpacity>
+      {control === 'favourite' ? (
+        <TouchableOpacity
+          style={[s.heartBtn, { backgroundColor: tc.goldWash }]}
+          onPress={withTap(onRemove)}
+          hitSlop={hitSlopFor(34)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityState={{ selected: true }}
+          accessibilityLabel={t('a11y.unfavourite', { item: item.word })}
+        >
+          <HeartIcon size={19} filled color={tc.gold} />
+        </TouchableOpacity>
+      ) : (
+        <RemoveCheck
+          onPress={onRemove}
+          label={t('a11y.removeFromList', { item: item.word })}
+          tc={tc}
+          s={s}
+        />
+      )}
     </View>
   );
 }

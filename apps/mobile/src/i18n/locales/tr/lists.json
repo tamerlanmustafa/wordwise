@@ -57,11 +57,24 @@
     "words": "Keşfet'ten kelime ekle."
   },
   "error": {
-    "retry": "Yenilenemedi. Tekrar denemek için dokun."
+    "retry": "Yenilenemedi. Tekrar denemek için dokun.",
+    "removeFailed": "Kaldırılamadı. Lütfen tekrar dene.",
+    "addFailed": "Eklenemedi. Lütfen tekrar dene.",
+    "deleteFailed": "Liste silinemedi. Lütfen tekrar dene.",
+    "renameFailed": "Listenin adı değiştirilemedi. Lütfen tekrar dene."
   },
   "srs": {
     "new": "yeni",
     "learning": "öğreniliyor",
     "learned": "öğrenildi"
+  },
+  "removed": {
+    "fromList": "{{name}} listesinden kaldırıldı"
+  },
+  "a11y": {
+    "options": "Liste seçenekleri",
+    "sort": "Sırala",
+    "removeFromList": "{{item}} öğesini bu listeden kaldır",
+    "unfavourite": "{{item}} öğesini Favorilerden kaldır"
   }
 }

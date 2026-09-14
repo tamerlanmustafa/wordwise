@@ -8,6 +8,16 @@
  *
  * A duplicate name lands on the field, not in a toast: the user is still
  * looking at the input and can fix it in place.
+ *
+ * ## Also the rename sheet
+ *
+ * `mode="rename"` reuses the same field, error handling and keyboard lift for
+ * renaming an existing list, minus the kind tiles — kind is fixed once a list
+ * exists. Renaming was built in the store and the API, and translated in all
+ * six locales (`rename.title`, `rename.submit`), but no screen ever offered
+ * it: a typo in a list's name was permanent unless you deleted the list and
+ * rebuilt it by hand. A second sheet would have been a second copy of every
+ * rule this one already gets right.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -20,29 +30,39 @@ import { newListErrorKey } from './newListError';
 import type { ListKind } from '../../core/types';
 import { withTap } from '../../utils/feedback';
 
-interface Props {
+type Props = {
   visible: boolean;
   onClose: () => void;
   bottomOffset: number;
-  /** Rejects with a ListApiError so `duplicate_name` can land on the field. */
-  onCreate: (name: string, kind: ListKind) => Promise<void>;
-  /** Which kind to preselect — the segment the user is currently looking at. */
-  initialKind?: ListKind;
-}
+} & (
+  | {
+      mode?: 'create';
+      /** Rejects with a ListApiError so `duplicate_name` can land on the field. */
+      onCreate: (name: string, kind: ListKind) => Promise<void>;
+      /** Which kind to preselect — the segment the user is currently looking at. */
+      initialKind?: ListKind;
+    }
+  | {
+      mode: 'rename';
+      /** The list's current name, pre-filled so a typo is one edit away. */
+      initialName: string;
+      /** Rejects with a ListApiError so `duplicate_name` can land on the field. */
+      onRename: (name: string) => Promise<void>;
+    }
+);
 
-export function NewListSheet({
-  visible,
-  onClose,
-  bottomOffset,
-  onCreate,
-  initialKind = 'films',
-}: Props) {
+export function NewListSheet(props: Props) {
+  const { visible, onClose, bottomOffset } = props;
+  const isRename = props.mode === 'rename';
+  const initialKind = props.mode === 'rename' ? 'words' : props.initialKind ?? 'films';
+  const initialName = props.mode === 'rename' ? props.initialName : '';
+
   const { t } = useTranslation('lists');
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
   const [kind, setKind] = useState<ListKind>(initialKind);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,11 +70,11 @@ export function NewListSheet({
   useEffect(() => {
     if (visible) {
       setKind(initialKind);
-      setName('');
+      setName(initialName);
       setError(null);
       setBusy(false);
     }
-  }, [visible, initialKind]);
+  }, [visible, initialKind, initialName]);
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -62,16 +82,23 @@ export function NewListSheet({
       setError(t('new.errorEmpty'));
       return;
     }
+    // Saving the name it already has is not an edit — close without a request
+    // rather than round-trip to be told nothing changed.
+    if (isRename && trimmed === initialName) {
+      onClose();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await onCreate(trimmed, kind);
+      if (props.mode === 'rename') await props.onRename(trimmed);
+      else await props.onCreate(trimmed, kind);
       onClose();
     } catch (e) {
-      // A known refusal gets our words; anything else falls back to whatever
-      // the layer below said, which is unhelpful but never silent.
+      // A known refusal gets our words. Anything else: a rename says so in the
+      // user's language; create keeps its original fallback to the layer below.
       const key = newListErrorKey((e as { code?: string })?.code);
-      setError(key ? t(key) : (e as Error).message);
+      setError(key ? t(key) : isRename ? t('error.renameFailed') : (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -79,9 +106,10 @@ export function NewListSheet({
 
   return (
     <BottomSheet visible={visible} onClose={onClose} bottomOffset={bottomOffset}>
-      <Text style={s.title}>{t('new.title')}</Text>
-      <Text style={s.subtitle}>{t('new.subtitle')}</Text>
+      <Text style={s.title}>{isRename ? t('rename.title') : t('new.title')}</Text>
+      {isRename ? null : <Text style={s.subtitle}>{t('new.subtitle')}</Text>}
 
+      {isRename ? null : (
       <View style={s.tiles}>
         {/* Words first. A word list is the one people make — words are what
             you collect while reading, and a films list is the occasional
@@ -105,6 +133,7 @@ export function NewListSheet({
           );
         })}
       </View>
+      )}
 
       <TextInput
         style={[s.input, error ? { borderColor: tc.error } : null]}
@@ -124,11 +153,12 @@ export function NewListSheet({
 
       <TouchableOpacity
         style={[s.submit, busy && { opacity: 0.6 }]}
-        onPress={submit}
+        onPress={withTap(submit)}
         disabled={busy}
         activeOpacity={0.85}
+        accessibilityRole="button"
       >
-        <Text style={s.submitLabel}>{t('new.submit')}</Text>
+        <Text style={s.submitLabel}>{isRename ? t('rename.submit') : t('new.submit')}</Text>
       </TouchableOpacity>
     </BottomSheet>
   );
