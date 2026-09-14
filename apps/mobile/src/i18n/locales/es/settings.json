@@ -75,5 +75,16 @@
   "reminderTime": "Avísame a las",
   "reminderTitle": "Hora de la lección de hoy",
   "reminderBody": "Un par de minutos mantienen viva tu racha.",
-  "reminderDenied": "Las notificaciones están desactivadas para WordWise en los ajustes del dispositivo."
+  "reminderDenied": "Las notificaciones están desactivadas para WordWise en los ajustes del dispositivo.",
+  "currentPlan": "Plan actual",
+  "subscriptionPlus": "WordWise Plus",
+  "subscriptionTrial": "Prueba gratuita",
+  "subscriptionComped": "Cortesía",
+  "subscriptionFree": "Gratis",
+  "subscriptionUnknown": "Comprobando…",
+  "renews": "Se renueva el {{date}}",
+  "upgradeToPlus": "Cambiar a Plus",
+  "upgradeToPlusDesc": "Práctica ilimitada, todas las películas, sin límites.",
+  "subscriptionFreeFooter": "Plus desbloquea práctica diaria ilimitada y todas las películas de la biblioteca.",
+  "restoringPurchases": "Restaurando…"
 }

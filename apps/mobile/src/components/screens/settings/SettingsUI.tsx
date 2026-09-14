@@ -109,7 +109,17 @@ export function Row({
   if (!onPress) return body;
   return (
     <TouchableOpacity
-      onPress={onPress}
+      // Wrapped HERE, once, rather than at every call site. Every navigation
+      // row in the Profile tree — Settings, Notifications, Account, Legal,
+      // Restore Purchases, Delete Account, Log out — was silent, while the
+      // theme control and the pickers two rows away buzzed. `buttonHaptics`
+      // cannot see this: it only checks inline `onPress={() => …}` handlers,
+      // and every one of these passes an identifier.
+      //
+      // The other half of the rule follows from this: a caller must NOT wrap
+      // again, or one press is two buzzes. The SelectRow call sites that used
+      // to wrap have been unwrapped.
+      onPress={withTap(onPress)}
       activeOpacity={0.6}
       accessibilityRole="button"
       accessibilityLabel={label}

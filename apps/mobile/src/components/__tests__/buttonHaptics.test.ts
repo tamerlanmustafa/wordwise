@@ -52,6 +52,26 @@ const EXEMPT: { file: string; match: string; why: string }[] = [
     match: 'onPress',
     why: 'FeedFilterSheet wraps before handing the callback down (CLAUDE.md)',
   },
+  // The settings list primitive wraps what it is handed. It did not until the
+  // Profile audit — every navigation row in the account area was silent while
+  // the theme control two rows below buzzed — and these three call sites were
+  // the only ones compensating by wrapping themselves. Now that Row wraps,
+  // they must not, or one press is two buzzes.
+  {
+    file: 'components/screens/SettingsScreen.tsx',
+    match: 'setShowNativeLangPicker(true)',
+    why: 'SettingsUI Row wraps the callback SelectRow hands it',
+  },
+  {
+    file: 'components/screens/SettingsScreen.tsx',
+    match: 'setShowProficiencyPicker(true)',
+    why: 'SettingsUI Row wraps the callback SelectRow hands it',
+  },
+  {
+    file: 'components/screens/NotificationSettingsScreen.tsx',
+    match: 'setShowHourPicker(true)',
+    why: 'SettingsUI Row wraps the callback SelectRow hands it',
+  },
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

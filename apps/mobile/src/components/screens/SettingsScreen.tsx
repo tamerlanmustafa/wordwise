@@ -21,6 +21,8 @@ import {
   normalizeUsername,
   usernameState,
 } from './profileForm';
+import { USERNAME_MAX, usernameProblem } from '../../utils/username';
+import { clearExplicitAppLanguage } from '../../i18n';
 import { makeSettingsStyles } from './settingsStyles';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { ScreenHeader } from '../common/ScreenHeader';
@@ -79,14 +81,48 @@ export const SettingsScreen = ({
    * user picked — `setTargetLanguage` already keeps `learning_language` in
    * step, and leaving the third column disagreeing with the other two is how
    * this got confusing in the first place.
+   *
+   * ## It now moves the interface too, which it never actually did
+   *
+   * The App language section was removed from this screen deliberately, on the
+   * understanding that the UI would simply follow the translation language.
+   * It did not. `resolveAppLanguage` ranks the account's `language_preference`
+   * ABOVE the translation language, and signup pins that column to whatever
+   * the device locale was at the time — so the interface was frozen at signup
+   * and this picker could never move it. `setAppLanguage(persist)` and
+   * `clearExplicitAppLanguage` existed for a Settings control that no longer
+   * shipped, and had zero production call sites.
+   *
+   * Measured: an account with `native_language: es` and
+   * `language_preference: en` — Spanish translations, English interface, and
+   * no control anywhere to change it. Six locales that most accounts could
+   * never reach.
+   *
+   * Clearing the pin (rather than setting it to the new language) is what
+   * keeps the documented behaviour honest: the interface *follows* the
+   * translation language from here on, instead of being re-pinned to a value
+   * the user never chose.
    */
   const handleSelectNativeLanguage = (code: string) => {
     setTargetLanguage(code);
     if (!user) return;
     authApi
-      .updateProfile({ native_language: code.toLowerCase() })
-      .then(onUserUpdated)
-      .catch(() => {});
+      // `language_preference: ''` is the schema's documented "clear it", and
+      // it has to go in the same PATCH — two requests would let one land and
+      // the other fail, leaving the columns disagreeing again.
+      .updateProfile({ native_language: code.toLowerCase(), language_preference: '' })
+      .then((fresh) => {
+        onUserUpdated(fresh);
+        // Drop the device-side pin as well, then re-derive. The account copy
+        // and the local copy are one preference stored twice; clearing only
+        // one restores the other on the next launch.
+        void clearExplicitAppLanguage(code);
+      })
+      .catch(() => {
+        // Best-effort, like the rest of this screen's language writes: the
+        // translation language already applies locally and the next change
+        // retries. Never block the picker on the network.
+      });
   };
 
   /**
@@ -144,9 +180,12 @@ export const SettingsScreen = ({
   const handleSaveUsername = async () => {
     const next = normalizeUsername(username);
     if (!canSaveUsername(username, user?.username)) {
-      if (usernameState(username, user?.username) === 'empty') {
-        setError(t('settings:usernameRequired'));
-      }
+      const state = usernameState(username, user?.username);
+      if (state === 'empty') setError(t('settings:usernameRequired'));
+      // Say which rule, rather than letting the server answer with a 422 the
+      // user then has to interpret. Same rules as onboarding — this screen had
+      // none, which is how a 300-character name reached the database.
+      if (state === 'invalid') setError(usernameProblem(username, t) ?? '');
       return;
     }
     await savePatch({ username: next }, t('settings:saveSuccess'));
@@ -261,6 +300,9 @@ export const SettingsScreen = ({
               autoCorrect={false}
               returnKeyType="done"
               onSubmitEditing={handleSaveUsername}
+              // The same ceiling onboarding's field has had all along. Without
+              // it this box accepted 300 characters and the server stored them.
+              maxLength={USERNAME_MAX}
             />
             {/* Save sits with the field it saves, and only appears once there
                 is something to save. */}
@@ -305,12 +347,12 @@ export const SettingsScreen = ({
             <SelectRow
               label={t('settings:nativeLanguage')}
               value={getTargetLangName(targetLanguage)}
-              onPress={withTap(() => setShowNativeLangPicker(true))}
+              onPress={() => setShowNativeLangPicker(true)}
             />
             <SelectRow
               label={t('settings:proficiencyLevel')}
               value={getProfName(proficiencyLevel)}
-              onPress={withTap(() => setShowProficiencyPicker(true))}
+              onPress={() => setShowProficiencyPicker(true)}
             />
           </Rows>
         </Section>

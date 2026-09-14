@@ -51,17 +51,50 @@ describe('billing scaffold (no native IAP module)', () => {
     await expect(restorePurchases()).resolves.toEqual({ restored: true, message: 'Subscription restored!' });
   });
 
+  it('keeps the server’s answer for an account that is already premium', async () => {
+    // The bug this replaces. `/billing/restore` returns restored:false for an
+    // active subscriber, carrying the one genuinely useful sentence of the
+    // three — and the old code checked only the boolean, fell through to the
+    // native path, and told a paying customer "Billing not available in this
+    // build" under a translated title.
+    mockServerRestore.mockResolvedValueOnce({
+      restored: false,
+      tier: 'premium',
+      message: 'Your subscription is already active.',
+    });
+    await expect(restorePurchases()).resolves.toEqual({
+      restored: false,
+      message: 'Your subscription is already active.',
+    });
+  });
+
   it('restorePurchases falls through to the native path (unavailable) when the server finds nothing', async () => {
-    mockServerRestore.mockResolvedValueOnce({ restored: false, message: 'No active subscription found.' });
+    mockServerRestore.mockResolvedValueOnce({
+      restored: false,
+      tier: 'free',
+      message: 'No active subscription found.',
+    });
     await expect(restorePurchases()).resolves.toEqual({
       restored: false,
       message: 'Billing not available in this build.',
+      // The key is what the screen renders; `message` survives only as the
+      // fallback for the server's own prose. Without it the alert was a
+      // translated title over an English body.
+      messageKey: 'billing:paywall.restoreUnavailable',
     });
   });
 
   it('restorePurchases survives a throwing server call and still reports unavailable', async () => {
     mockServerRestore.mockRejectedValueOnce(new Error('network'));
     await expect(restorePurchases()).resolves.toMatchObject({ restored: false });
+  });
+
+  it('every unavailable outcome carries a translatable key', async () => {
+    // The property, not the strings: any path that ends in a message the user
+    // reads must be able to say it in their language.
+    mockServerRestore.mockRejectedValueOnce(new Error('network'));
+    const out = await restorePurchases();
+    expect(out.messageKey).toBeTruthy();
   });
 
   it('disconnectBilling resolves quietly', async () => {

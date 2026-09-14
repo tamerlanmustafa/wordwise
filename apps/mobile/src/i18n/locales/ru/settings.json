@@ -75,5 +75,16 @@
   "reminderTime": "Напоминать в",
   "reminderTitle": "Пора заняться уроком",
   "reminderBody": "Пара минут — и серия продолжается.",
-  "reminderDenied": "Уведомления для WordWise отключены в настройках устройства."
+  "reminderDenied": "Уведомления для WordWise отключены в настройках устройства.",
+  "currentPlan": "Текущий план",
+  "subscriptionPlus": "WordWise Plus",
+  "subscriptionTrial": "Пробный период",
+  "subscriptionComped": "Бесплатный доступ",
+  "subscriptionFree": "Бесплатно",
+  "subscriptionUnknown": "Проверяем…",
+  "renews": "Продлится {{date}}",
+  "upgradeToPlus": "Перейти на Plus",
+  "upgradeToPlusDesc": "Безлимитная практика, все фильмы, без ограничений.",
+  "subscriptionFreeFooter": "Plus открывает безлимитную ежедневную практику и все фильмы в библиотеке.",
+  "restoringPurchases": "Восстанавливаем…"
 }

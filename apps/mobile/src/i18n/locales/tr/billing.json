@@ -41,6 +41,10 @@
     "getPlus": "Plus'ı al",
     "hintTrial": "7 gün ücretsiz, sonra ayda {{price}} · İstediğin zaman iptal et",
     "hintAnnual": "Yılda {{price}} · İstediğin zaman iptal et",
-    "free": "Ücretsiz"
+    "free": "Ücretsiz",
+    "restoreUnavailable": "Bu sürümde satın almalar kullanılamıyor.",
+    "restoreNotFound": "Bu hesap için etkin bir abonelik bulamadık.",
+    "restoreSucceeded": "Aboneliğin geri geldi.",
+    "restoreFailed": "Satın almaların kontrol edilemedi. Lütfen tekrar dene."
   }
 }

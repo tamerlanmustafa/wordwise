@@ -142,7 +142,7 @@ export function NotificationSettingsScreen({ onBack }: { onBack: () => void }) {
               <SelectRow
                 label={t('settings:reminderTime')}
                 value={formatHour(reminderHour)}
-                onPress={withTap(() => setShowHourPicker(true))}
+                onPress={() => setShowHourPicker(true)}
               />
             ) : null}
           </Rows>

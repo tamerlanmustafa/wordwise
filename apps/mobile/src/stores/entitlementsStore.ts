@@ -77,17 +77,12 @@ const PREMIUM_ENTITLEMENTS: Entitlements = {
  * directly in UI code; doing so bypasses the preview toggle and leaves
  * admins unable to test the free experience.
  */
-function useEffectiveEntitlements(): Entitlements {
-  const user = useAuthStore((s) => s.user);
-  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
-
-  const real = user?.entitlements;
-  if (!real) return FREE_ENTITLEMENTS;
-
+/** The admin preview toggle, applied to a known entitlement. */
+function applyAdminView(real: Entitlements, mode: AdminViewMode): Entitlements {
   // Toggle only does anything for admins. Everyone else sees reality.
   if (!real.is_admin) return real;
 
-  switch (adminViewMode) {
+  switch (mode) {
     case 'free':
       // Simulate a free user. Keep is_admin=true so the admin screen and
       // view-mode toggle remain accessible — we're previewing the product,
@@ -99,6 +94,36 @@ function useEffectiveEntitlements(): Entitlements {
     default:
       return real;
   }
+}
+
+function useEffectiveEntitlements(): Entitlements {
+  const user = useAuthStore((s) => s.user);
+  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
+
+  const real = user?.entitlements;
+  // Gates fail closed: an unknown entitlement locks premium features rather
+  // than unlocking them. That is the right default for a *gate* and the wrong
+  // one for a *label*, which is why `useEntitlements` exists separately and
+  // keeps the undefined.
+  if (!real) return FREE_ENTITLEMENTS;
+
+  return applyAdminView(real, adminViewMode);
+}
+
+/**
+ * The whole entitlement, for surfaces that need more than a yes/no.
+ *
+ * The Account screen shows the tier and the renewal date, which `useIsPremium`
+ * cannot express — and the distinction that matters most there is one a
+ * boolean erases entirely: `undefined` (the server has not answered yet) is not
+ * `false`. Rendering an upgrade pitch on an unknown tier is how a paying
+ * subscriber gets asked to pay again.
+ */
+export function useEntitlements(): Entitlements | undefined {
+  const user = useAuthStore((s) => s.user);
+  const adminViewMode = useEntitlementsStore((s) => s.adminViewMode);
+  if (!user?.entitlements) return undefined;
+  return applyAdminView(user.entitlements, adminViewMode);
 }
 
 export function useIsPremium(): boolean {

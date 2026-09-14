@@ -24,12 +24,16 @@
  * they can be tested — mobile testing here is logic + integration only.
  */
 
+import { usernameIsValid } from '../../utils/username';
+
 /** What the username field is currently asking for. */
 export type UsernameState =
   /** Same as what the server already has — nothing to do. */
   | 'unchanged'
   /** Blank or whitespace. The server would reject it and so do we. */
   | 'empty'
+  /** Breaks a rule: too short, too long, or contains whitespace. */
+  | 'invalid'
   /** A real, different name, ready to submit. */
   | 'ready';
 
@@ -43,11 +47,21 @@ export function normalizeUsername(raw: string): string {
  *
  * `saved` may be null/undefined for an account that has never had one, which
  * makes any non-empty draft `ready` rather than `unchanged`.
+ *
+ * ## `invalid` is new, and it is the gap this audit found
+ *
+ * Onboarding enforced 2–30 characters and no spaces via `utils/username`.
+ * This screen enforced nothing but non-emptiness — the same field, reachable
+ * at any time, with the weaker rules. Measured against the running API, it
+ * would happily PATCH a 300-character name or one containing newlines. The
+ * server rejects those now, so without this state the user would get a raw
+ * 422 back instead of being told before they pressed the button.
  */
 export function usernameState(draft: string, saved: string | null | undefined): UsernameState {
   const next = normalizeUsername(draft);
   if (next.length === 0) return 'empty';
   if (next === normalizeUsername(saved ?? '')) return 'unchanged';
+  if (!usernameIsValid(next)) return 'invalid';
   return 'ready';
 }
 

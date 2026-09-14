@@ -27,6 +27,11 @@ interface AuthState {
   /** Server-side account deletion, then local sign-out. Throws (leaving the
    *  session intact) if the server call fails. App Store 5.1.1(v). */
   deleteAccount: () => Promise<void>;
+  /** Re-read `/auth/me` and reconcile. Used after anything that changes the
+   *  account server-side without returning the new user — a restored purchase
+   *  being the one that matters, since the screen behind the confirmation
+   *  alert has to already agree with it. Never throws. */
+  refreshUser: () => Promise<void>;
   initialize: () => Promise<void>;
 }
 
@@ -156,6 +161,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // one outcome "delete my account" must not have.
     await resetAccountState();
     set({ user: null, status: 'unauthenticated' });
+  },
+
+  refreshUser: async () => {
+    await refreshMe(set);
   },
 
   initialize: async () => {

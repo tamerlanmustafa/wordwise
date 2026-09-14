@@ -112,3 +112,45 @@ describe('hasUnsavedUsername — the Back guard', () => {
     }
   });
 });
+
+/**
+ * The rules this screen did not have.
+ *
+ * Onboarding enforced 2–30 characters and no whitespace via `utils/username`.
+ * Settings trimmed and nothing else — the same field, reachable at any time,
+ * with the weaker rules. Measured against the running API, this path would
+ * PATCH a 300-character name, or one containing newlines and markup, and the
+ * server stored it. `schemas/user.py` rejects those now, so without the
+ * `invalid` state the user would meet a raw 422 instead of being told before
+ * they pressed the button.
+ */
+describe('a draft that breaks a rule', () => {
+  it('is invalid, not ready', () => {
+    expect(usernameState('a', 'tamerlan')).toBe('invalid');
+    expect(usernameState('x'.repeat(31), 'tamerlan')).toBe('invalid');
+    expect(usernameState('john smith', 'tamerlan')).toBe('invalid');
+    expect(usernameState('a\nb', 'tamerlan')).toBe('invalid');
+  });
+
+  it('cannot be saved', () => {
+    expect(canSaveUsername('john smith', 'tamerlan')).toBe(false);
+    expect(canSaveUsername('x'.repeat(31), 'tamerlan')).toBe(false);
+  });
+
+  it('is not defended by the Back guard', () => {
+    // A confirm dialog for an edit the Save button refuses is a trap with no
+    // exit — the user cannot satisfy it and cannot leave.
+    expect(hasUnsavedUsername('john smith', 'tamerlan')).toBe(false);
+  });
+
+  it('still reports a whitespace-only draft as empty', () => {
+    // It trims to nothing, so "required" is the honest message — and this is
+    // the value that reached the database and rendered as a blank name.
+    expect(usernameState('   ', 'tamerlan')).toBe('empty');
+  });
+
+  it('leaves a valid change ready', () => {
+    expect(usernameState('cinephile', 'tamerlan')).toBe('ready');
+    expect(usernameState('Ünal_42', 'tamerlan')).toBe('ready');
+  });
+});

@@ -1087,7 +1087,17 @@ export default function App() {
           ) : screen === 'notificationSettings' ? (
             <NotificationSettingsScreen onBack={backFrom('notificationSettings')} />
           ) : screen === 'account' ? (
-            <AccountScreen onBack={backFrom('account')} onNavigateToFamilyPlan={navigateToFamilyPlan} />
+            <AccountScreen
+              onBack={backFrom('account')}
+              onNavigateToFamilyPlan={navigateToFamilyPlan}
+              // `reason: null` — the paywall's own type already documents this
+              // case as "just browsing the upgrade (a Settings tap, an upsell
+              // row)". It was the only reason with no entry point: the paywall
+              // could be reached solely by being turned away from something
+              // mid-session, which is when a person is least inclined to read
+              // it. Back returns to Account, not to whatever tab is behind.
+              onNavigateToPaywall={() => navigateToPaywall(0, 0, null)}
+            />
           ) : screen === 'legal' ? (
             <LegalScreen
               onBack={backFrom('legal')}

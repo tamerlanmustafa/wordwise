@@ -75,5 +75,16 @@
   "reminderTime": "ذكّرني عند",
   "reminderTitle": "حان وقت درس اليوم",
   "reminderBody": "دقيقتان تكفيان لمواصلة سلسلتك.",
-  "reminderDenied": "الإشعارات معطّلة لـ WordWise في إعدادات جهازك."
+  "reminderDenied": "الإشعارات معطّلة لـ WordWise في إعدادات جهازك.",
+  "currentPlan": "الخطة الحالية",
+  "subscriptionPlus": "WordWise Plus",
+  "subscriptionTrial": "تجربة مجانية",
+  "subscriptionComped": "مجاني",
+  "subscriptionFree": "مجاني",
+  "subscriptionUnknown": "جارٍ التحقق…",
+  "renews": "يتجدد في {{date}}",
+  "upgradeToPlus": "الترقية إلى Plus",
+  "upgradeToPlusDesc": "تدريب غير محدود، كل الأفلام، بلا قيود.",
+  "subscriptionFreeFooter": "يفتح Plus تدريبًا يوميًا غير محدود وكل الأفلام في المكتبة.",
+  "restoringPurchases": "جارٍ الاستعادة…"
 }

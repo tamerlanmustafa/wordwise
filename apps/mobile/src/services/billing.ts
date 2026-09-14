@@ -92,7 +92,10 @@ export function setPurchaseListener(
 ): () => void {
   if (!IAP) return () => {};
 
-  const subscription = IAP.setPurchaseListener(async ({ responseCode, results }: any) => {
+  // Not captured: expo-in-app-purchases' setPurchaseListener returns void, so
+  // there is no subscription object to hold. The assignment was dead and lint
+  // had been calling it out; the cleanup below says what actually happens.
+  IAP.setPurchaseListener(async ({ responseCode, results }: any) => {
     if (responseCode === IAP!.IAPResponseCode.OK && results) {
       for (const purchase of results) {
         if (!purchase.acknowledged) {
@@ -130,19 +133,57 @@ export function setPurchaseListener(
   };
 }
 
-export async function restorePurchases(): Promise<{
+export interface RestoreOutcome {
   restored: boolean;
+  /** The server's own sentence, when it sent one. Already in English. */
   message: string;
-}> {
-  // First try server-side restore
+  /** i18n key to prefer over `message`. See the note below. */
+  messageKey?: string;
+}
+
+/**
+ * Restore a purchase made on another device, or before a reinstall.
+ *
+ * ## Three things were wrong here
+ *
+ * **The server's answer was thrown away.** `/billing/restore` returns
+ * `restored: false` for an active subscriber too, carrying the genuinely
+ * useful "Your subscription is already active." The old code checked only the
+ * boolean, so it fell straight through to the native path and reported
+ * "Billing not available in this build" — to a paying customer.
+ *
+ * **Android could never succeed.** The native branch verified receipts under
+ * `Platform.OS === 'ios'` only, so an Android user with a real purchase fell
+ * past it to "No active subscription found" every time.
+ *
+ * **The messages were hardcoded English** under a title that was translated,
+ * so a Russian user got "Не найдено" above an English sentence. They are i18n
+ * keys now; `message` survives only for the server's own prose, which is the
+ * one string this app genuinely cannot translate on the client.
+ */
+export async function restorePurchases(): Promise<RestoreOutcome> {
+  // Ask the server first: it is the only party that knows whether *this
+  // account* is already entitled, regardless of which store the purchase came
+  // from or which device is asking.
   try {
     const result = await billingApi.restorePurchases();
-    if (result.restored) return result;
-  } catch {}
+    // Not `if (result.restored)`. An already-premium account comes back false
+    // with the most useful message of the three, and discarding it is what
+    // told subscribers their billing was broken.
+    if (result.restored || result.tier === 'premium') {
+      return { restored: result.restored, message: result.message };
+    }
+  } catch {
+    // Offline, or the endpoint is down. The native path below can still
+    // answer from the store's own records.
+  }
 
-  // Then try native restore
   if (!IAP || !isConnected) {
-    return { restored: false, message: 'Billing not available in this build.' };
+    return {
+      restored: false,
+      message: 'Billing not available in this build.',
+      messageKey: 'billing:paywall.restoreUnavailable',
+    };
   }
 
   try {
@@ -150,21 +191,42 @@ export async function restorePurchases(): Promise<{
     if (results && results.length > 0) {
       const latest = results[results.length - 1];
       try {
-        if (Platform.OS === 'ios') {
-          const status = await billingApi.verifyAppleReceipt(
-            latest.transactionReceipt || '',
-            latest.productId,
-          );
-          if (status.is_premium) {
-            return { restored: true, message: 'Subscription restored!' };
-          }
+        // Both platforms, not just iOS. Each store hands back a different
+        // credential — a receipt blob on Apple, a purchase token on Google —
+        // which is why this is a branch and not one call.
+        const status =
+          Platform.OS === 'ios'
+            ? await billingApi.verifyAppleReceipt(
+                latest.transactionReceipt || '',
+                latest.productId,
+              )
+            : await billingApi.verifyGoogleReceipt(
+                latest.purchaseToken || '',
+                latest.productId,
+              );
+        if (status.is_premium) {
+          return {
+            restored: true,
+            message: 'Subscription restored!',
+            messageKey: 'billing:paywall.restoreSucceeded',
+          };
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[billing] receipt verification failed:', e);
+      }
     }
-    return { restored: false, message: 'No active subscription found.' };
+    return {
+      restored: false,
+      message: 'No active subscription found.',
+      messageKey: 'billing:paywall.restoreNotFound',
+    };
   } catch (e) {
     console.warn('[billing] restore failed:', e);
-    return { restored: false, message: 'Restore failed. Please try again.' };
+    return {
+      restored: false,
+      message: 'Restore failed. Please try again.',
+      messageKey: 'billing:paywall.restoreFailed',
+    };
   }
 }
 

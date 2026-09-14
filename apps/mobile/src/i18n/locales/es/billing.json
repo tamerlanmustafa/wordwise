@@ -41,6 +41,10 @@
     "getPlus": "Obtener Plus",
     "hintTrial": "Gratis 7 días, luego {{price}} al mes · Cancela cuando quieras",
     "hintAnnual": "{{price}} al año · Cancela cuando quieras",
-    "free": "Gratis"
+    "free": "Gratis",
+    "restoreUnavailable": "Las compras no están disponibles en esta versión.",
+    "restoreNotFound": "No encontramos una suscripción activa para esta cuenta.",
+    "restoreSucceeded": "Tu suscripción ha vuelto.",
+    "restoreFailed": "No pudimos comprobar tus compras. Inténtalo de nuevo."
   }
 }

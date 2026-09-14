@@ -75,5 +75,16 @@
   "reminderTime": "Şu saatte hatırlat",
   "reminderTitle": "Bugünün dersi zamanı",
   "reminderBody": "Birkaç dakika serini sürdürmeye yeter.",
-  "reminderDenied": "WordWise için bildirimler cihaz ayarlarında kapalı."
+  "reminderDenied": "WordWise için bildirimler cihaz ayarlarında kapalı.",
+  "currentPlan": "Mevcut plan",
+  "subscriptionPlus": "WordWise Plus",
+  "subscriptionTrial": "Ücretsiz deneme",
+  "subscriptionComped": "Hediye",
+  "subscriptionFree": "Ücretsiz",
+  "subscriptionUnknown": "Kontrol ediliyor…",
+  "renews": "{{date}} tarihinde yenilenir",
+  "upgradeToPlus": "Plus'a geç",
+  "upgradeToPlusDesc": "Sınırsız pratik, tüm filmler, limit yok.",
+  "subscriptionFreeFooter": "Plus, sınırsız günlük pratiği ve kitaplıktaki tüm filmleri açar.",
+  "restoringPurchases": "Geri yükleniyor…"
 }

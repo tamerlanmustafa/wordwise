@@ -75,5 +75,16 @@
   "reminderTime": "Remind me at",
   "reminderTitle": "Time for today's lesson",
   "reminderBody": "A couple of minutes keeps your streak going.",
-  "reminderDenied": "Notifications are off for WordWise in your device settings."
+  "reminderDenied": "Notifications are off for WordWise in your device settings.",
+  "currentPlan": "Current plan",
+  "subscriptionPlus": "WordWise Plus",
+  "subscriptionTrial": "Free trial",
+  "subscriptionComped": "Complimentary",
+  "subscriptionFree": "Free",
+  "subscriptionUnknown": "Checking…",
+  "renews": "Renews {{date}}",
+  "upgradeToPlus": "Upgrade to Plus",
+  "upgradeToPlusDesc": "Unlimited practice, every film, no limits.",
+  "subscriptionFreeFooter": "Plus unlocks unlimited daily practice and every film in the library.",
+  "restoringPurchases": "Restoring…"
 }

@@ -21,7 +21,11 @@
     "getPlus": "Get Plus",
     "hintTrial": "Free for 7 days, then {{price}} a month · Cancel anytime",
     "hintAnnual": "{{price}} a year · Cancel anytime",
-    "free": "Free"
+    "free": "Free",
+    "restoreUnavailable": "Purchases are not available in this build.",
+    "restoreNotFound": "We could not find an active subscription for this account.",
+    "restoreSucceeded": "Your subscription is back.",
+    "restoreFailed": "We could not check your purchases. Please try again."
   },
   "family": {
     "title": "Family Plan",
