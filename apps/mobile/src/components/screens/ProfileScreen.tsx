@@ -9,8 +9,10 @@
  * which tab it had opened over so it could put you back there. A page needs
  * none of that — it is a tab root like Home or Lists, and Back is ordinary.
  *
- * It is a hub, not a settings screen: identity at the top, then the four
- * places account business actually happens. Everything a row leads to used to
+ * It is a hub, not a settings screen: the four places account business
+ * actually happens, then the appearance control just above Log out. Who is
+ * signed in — picture, username, email — heads Settings instead, above the
+ * username field it is edited in. Everything a row leads to used to
  * be one long scroll inside Settings, which meant "change my language" and
  * "delete my account" sat in the same list a swipe apart.
  *
@@ -32,11 +34,14 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { MenuIcon, type MenuIconName } from '../ui/icons/MenuIcons';
-import { Avatar, LinkRow, Rows, Section } from './settings/SettingsUI';
+import { LinkRow, Rows, Section, Segmented } from './settings/SettingsUI';
 import { showConfirm } from '../../stores/confirmStore';
+import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
+
+/** In the order the control shows them. */
+const THEME_OPTIONS: ThemePreference[] = ['light', 'system', 'dark'];
 
 interface Props {
-  user: any;
   isAdmin: boolean;
   onNavigateToSettings: () => void;
   onNavigateToNotifications: () => void;
@@ -47,7 +52,6 @@ interface Props {
 }
 
 export function ProfileScreen({
-  user,
   isAdmin,
   onNavigateToSettings,
   onNavigateToNotifications,
@@ -60,6 +64,8 @@ export function ProfileScreen({
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const barInset = useBottomBarInset();
+  const themePreference = useThemeStore((st) => st.preference);
+  const setThemePreference = useThemeStore((st) => st.setPreference);
 
   const confirmLogout = () =>
     showConfirm({
@@ -79,20 +85,6 @@ export function ProfileScreen({
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingBottom: barInset + 24 }]}
       >
-        {/* Identity. Read-only here — the editable username lives in Settings,
-            next to the other things you change rather than the things you are. */}
-        <View style={s.identity}>
-          <Avatar uri={user?.profile_picture_url} name={user?.username || user?.email} size={72} />
-          <Text style={s.name} numberOfLines={1}>
-            {user?.username || t('settings:usernamePlaceholder')}
-          </Text>
-          {user?.email ? (
-            <Text style={s.email} numberOfLines={1}>
-              {user.email}
-            </Text>
-          ) : null}
-        </View>
-
         <Section>
           <Rows>
             <IconRow icon="settings" label={t('settings:title')} onPress={onNavigateToSettings} />
@@ -111,6 +103,20 @@ export function ProfileScreen({
             <IconRow icon="admin" label={t('settings:menu.adminPanel')} onPress={onNavigateToAdmin} />
           </Section>
         ) : null}
+
+        {/* Appearance, directly above Log out. It lived in Settings until
+            2026-09-15, and this is still the app's only control over the
+            theme preference. */}
+        <Section title={t('settings:appearance')}>
+          <Segmented
+            value={themePreference}
+            onChange={setThemePreference}
+            options={THEME_OPTIONS.map((opt) => ({
+              value: opt,
+              label: t(`settings:theme.${opt}`),
+            }))}
+          />
+        </Section>
 
         <Section>
           <LinkRow label={t('settings:menu.logout')} muted onPress={confirmLogout} />
@@ -169,21 +175,6 @@ const makeStyles = (tc: ThemeColors) =>
     scroll: {
       paddingHorizontal: 16,
       paddingTop: 20,
-    },
-    identity: {
-      alignItems: 'center',
-      marginBottom: 26,
-    },
-    name: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: tc.text,
-      marginTop: 12,
-    },
-    email: {
-      fontSize: 13.5,
-      color: tc.textSecondary,
-      marginTop: 3,
     },
     iconRowWrap: {
       flexDirection: 'row',

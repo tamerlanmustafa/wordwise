@@ -1140,7 +1140,6 @@ export default function App() {
             <SettingsScreen onBack={backFrom('settings')} user={user} onUserUpdated={handleUserUpdated} targetLanguage={targetLanguage} setTargetLanguage={setTargetLanguage} />
           ) : screen === 'profile' ? (
             <ProfileScreen
-              user={user}
               isAdmin={!!user?.is_admin}
               onNavigateToSettings={navigateToSettings}
               onNavigateToNotifications={navigateToNotificationSettings}

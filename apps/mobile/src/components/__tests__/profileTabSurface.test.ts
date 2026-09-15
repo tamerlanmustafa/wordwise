@@ -7,7 +7,8 @@
  *     over the same `themeStore` that Settings › Appearance already owns. Two
  *     controls for one preference, and the copy did not even agree: the sheet
  *     hard-coded English ("Auto") while Settings runs its labels through i18n
- *     ("System"). Appearance now lives only in Settings.
+ *     ("System"). Appearance then lived only in Settings, and on 2026-09-15 it
+ *     moved to the Profile tab by request — still exactly one control.
  *
  *  2. **Every translation language is offered.** Settings rendered
  *     `AVAILABLE_LANGUAGES.slice(0, 8)`. The list holds twelve, so Chinese,
@@ -25,6 +26,7 @@ import { AVAILABLE_LANGUAGES } from '../../types/constants';
 
 const COMPONENTS = path.join(__dirname, '..');
 const SETTINGS = path.join(COMPONENTS, 'screens', 'SettingsScreen.tsx');
+const PROFILE = path.join(COMPONENTS, 'screens', 'ProfileScreen.tsx');
 
 /**
  * Read a source file with its comments removed.
@@ -41,24 +43,44 @@ const read = (p: string) =>
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('the theme preference has exactly one control', () => {
-  it('the profile hub does not touch themeStore', () => {
-    // Was the profile *sheet* until 2026-09-05; it is a screen now, and the
-    // guard follows the surface rather than the file that used to hold it.
-    expect(read(path.join(COMPONENTS, 'screens', 'ProfileScreen.tsx'))).not.toMatch(
-      /useThemeStore/,
-    );
+  // It moved from Settings to the Profile tab on 2026-09-15, by request. The
+  // rule did not move with it: one control, on one surface.
+  it('Settings no longer touches themeStore', () => {
+    expect(read(SETTINGS)).not.toMatch(/useThemeStore/);
   });
 
-  it('Settings still owns it', () => {
-    // The other half of the guard: consolidating onto Settings is only safe
-    // while Settings actually has the control.
-    expect(read(SETTINGS)).toMatch(/useThemeStore/);
+  it('the Profile tab owns it', () => {
+    // The other half of the guard: taking it out of Settings is only safe
+    // while the Profile tab actually has the control.
+    expect(read(PROFILE)).toMatch(/useThemeStore/);
   });
 
-  it('Settings sets it through i18n rather than hard-coded labels', () => {
-    // The sheet's chips said "Auto" in every language. Whatever survives has
-    // to be the translated one.
-    expect(read(SETTINGS)).toMatch(/settings:theme\./);
+  it('the Profile tab sets it through i18n rather than hard-coded labels', () => {
+    // The old sheet's chips said "Auto" in every language. Whatever survives
+    // has to be the translated one.
+    expect(read(PROFILE)).toMatch(/settings:theme\./);
+  });
+
+  it('sits at the bottom of the Profile tab, directly above Log out', () => {
+    const profile = read(PROFILE);
+    const appearance = profile.indexOf('settings:appearance');
+    expect(appearance).toBeGreaterThan(profile.indexOf('settings:menu.adminPanel'));
+    expect(appearance).toBeLessThan(profile.indexOf('settings:menu.logout'));
+  });
+});
+
+describe('who is signed in heads Settings', () => {
+  it('Settings shows the picture, the username and the email', () => {
+    const settings = read(SETTINGS);
+    expect(settings).toMatch(/<Identity/);
+    expect(settings).toMatch(/pictureUri=\{user\?\.profile_picture_url\}/);
+    expect(settings).toMatch(/email=\{user\?\.email\}/);
+  });
+
+  it('the Profile tab no longer does', () => {
+    const profile = read(PROFILE);
+    expect(profile).not.toMatch(/<Identity|<Avatar/);
+    expect(profile).not.toMatch(/profile_picture_url/);
   });
 });
 

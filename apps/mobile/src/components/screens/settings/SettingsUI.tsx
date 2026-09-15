@@ -283,6 +283,41 @@ export function Avatar({
   );
 }
 
+/**
+ * Who is signed in: the picture, the username and the email, centred.
+ *
+ * Read-only. On Settings it sits above the username field that edits it, so it
+ * shows the saved name rather than the draft being typed.
+ */
+export function Identity({
+  pictureUri,
+  username,
+  email,
+  placeholder,
+}: {
+  pictureUri?: string | null;
+  username?: string | null;
+  email?: string | null;
+  /** Shown in place of a username the account does not have yet. */
+  placeholder: string;
+}) {
+  const tc = useThemeColors();
+  const s = useMemo(() => makeStyles(tc), [tc]);
+  return (
+    <View style={s.identity}>
+      <Avatar uri={pictureUri} name={username || email || undefined} size={72} />
+      <Text style={s.identityName} numberOfLines={1}>
+        {username || placeholder}
+      </Text>
+      {email ? (
+        <Text style={s.identityEmail} numberOfLines={1}>
+          {email}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
     section: {
@@ -398,5 +433,20 @@ const makeStyles = (tc: ThemeColors) =>
     avatarInitial: {
       fontWeight: '700',
       color: tc.textSecondary,
+    },
+    identity: {
+      alignItems: 'center',
+      marginBottom: 26,
+    },
+    identityName: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: tc.text,
+      marginTop: 12,
+    },
+    identityEmail: {
+      fontSize: 13.5,
+      color: tc.textSecondary,
+      marginTop: 3,
     },
   });

@@ -12,7 +12,6 @@ import { TopInsetView } from '../common/TopInsetView';
 import { useTranslation } from 'react-i18next';
 import { CEFR_LEVELS, AVAILABLE_LANGUAGES } from '../../types';
 import { useThemeColors } from '../../theme/tokens';
-import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { authApi } from '../../services/api';
 import { showConfirm } from '../../stores/confirmStore';
 import {
@@ -27,9 +26,9 @@ import { makeSettingsStyles } from './settingsStyles';
 import { useBottomBarInset } from '../../hooks/useBottomBarInset';
 import { ScreenHeader } from '../common/ScreenHeader';
 import {
+  Identity,
   Rows,
   Section,
-  Segmented,
   SelectRow,
 } from './settings/SettingsUI';
 import { withTap } from '../../utils/feedback';
@@ -64,8 +63,6 @@ export const SettingsScreen = ({
 
   const { t } = useTranslation();
   const tc = useThemeColors();
-  const themePreference = useThemeStore((s) => s.preference);
-  const setThemePreference = useThemeStore((s) => s.setPreference);
   const settingsStyles = useMemo(() => makeSettingsStyles(tc), [tc]);
   // The tab bar is an absolute overlay, so this screen has to reserve its
   // height itself. Without it the last section — Legal — scrolled under the
@@ -287,6 +284,15 @@ export const SettingsScreen = ({
         contentContainerStyle={[settingsStyles.scrollContainer, { paddingBottom: barInset + 24 }]}
       >
         {/* ── Profile ───────────────────────────────────────────────────── */}
+        {/* Who is signed in, above the username field it is edited in. It
+            headed the Profile tab until 2026-09-15. */}
+        <Identity
+          pictureUri={user?.profile_picture_url}
+          username={user?.username}
+          email={user?.email}
+          placeholder={t('settings:usernamePlaceholder')}
+        />
+
         <Section title={t('settings:profile')}>
           <View style={settingsStyles.fieldBlockOnly}>
             <Text style={settingsStyles.inputLabel}>{t('settings:username')}</Text>
@@ -355,18 +361,6 @@ export const SettingsScreen = ({
               onPress={() => setShowProficiencyPicker(true)}
             />
           </Rows>
-        </Section>
-
-        {/* ── Appearance ────────────────────────────────────────────────── */}
-        <Section title={t('settings:appearance')}>
-          <Segmented
-            value={themePreference}
-            onChange={setThemePreference}
-            options={(['light', 'system', 'dark'] as ThemePreference[]).map((opt) => ({
-              value: opt,
-              label: t(`settings:theme.${opt}`),
-            }))}
-          />
         </Section>
 
       </ScrollView>
