@@ -49,9 +49,10 @@ describe('the upgrade sheet on a short phone', () => {
   it('pins the height the SE gets', () => {
     // Deliberately brittle, like the filter sheet's. It was ~870 and scrolled.
     // A block added to the sheet moves this number, and whoever adds it
-    // decides whether the smallest phones can afford it.
+    // decides whether the smallest phones can afford it. 529 with five feature
+    // rows; 508 since "No ads" came out on 2026-09-15.
     const se = PHONES.find(([name]) => name === 'iPhone SE')![1];
-    expect(heightOn(se)).toBe(529);
+    expect(heightOn(se)).toBe(508);
   });
 });
 

@@ -114,6 +114,10 @@ export const FilmFeedScreen = React.memo(({
   // See firstSessionStore.
   const openedBefore = useFirstSessionStore((st) => st.openedBefore);
   const showAds = showAdsEntitlement && openedBefore;
+  // No ad network is installed yet, so the slot above the feed stays off. It is
+  // an empty box labelled ADVERTISEMENT, and the Play listing declares the app
+  // ad-free. `showAds` stays wired for the day one is.
+  const AD_SLOT_LIVE = false;
   const [homeTab] = useState<'level' | 'trending'>('level');
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -549,8 +553,9 @@ export const FilmFeedScreen = React.memo(({
         </View>
 
         {/* Ad slot — chipBg fill, 1px dashed border, centered ADVERTISEMENT.
-            Hidden while the search dropdown is open. */}
-        {showAds && !dropdownOpen ? (
+            Hidden while the search dropdown is open, and off entirely until
+            an ad network is installed (AD_SLOT_LIVE). */}
+        {AD_SLOT_LIVE && showAds && !dropdownOpen ? (
           <View style={s.adSlot}>
             <Text style={s.adText}>{t('home:advertisement')}</Text>
           </View>

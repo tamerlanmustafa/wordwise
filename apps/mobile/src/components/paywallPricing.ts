@@ -67,7 +67,9 @@ export const PAYWALL_FEATURES: ReadonlyArray<PaywallFeature> = [
   // freezes — an upsell that forgets its own pitch between the tap and the
   // screen.
   { icon: 'shield', title: 'Two streak freezes armed', desc: 'Cover two missed days in a row instead of one.' },
-  { icon: 'block', title: 'No ads', desc: 'A clean, distraction-free learning experience.' },
+  // "No ads" is out until free users actually see ads. A benefit that removes
+  // nothing is padding at best, and beside a Play listing that declares the app
+  // ad-free it reads as a false claim. It comes back with the ad network.
   { icon: 'chart', title: 'Detailed stats', desc: 'Track retention and comprehension over time.' },
 ];
 

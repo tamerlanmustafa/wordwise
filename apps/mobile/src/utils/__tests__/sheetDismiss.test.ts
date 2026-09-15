@@ -15,7 +15,7 @@ import {
 } from '../sheetDismiss';
 
 /** The upgrade sheet's height on an iPhone SE (premiumSheetMetrics). */
-const SE_SHEET = 529;
+const SE_SHEET = 508;
 
 describe('claiming a drag', () => {
   it('leaves a tap to the button under the finger', () => {

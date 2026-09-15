@@ -158,6 +158,40 @@ describe('the settings deleted from app.json are still applied natively', () => 
   });
 });
 
+describe('the Android release manifest matches the Play Console declarations', () => {
+  // Added 2026-09-15 for the first Play upload. Each line is something Google
+  // checks a build against: a product it will not let you create, or an answer
+  // given in Play Console that the build has to agree with.
+  const manifest = readMobile('android', 'app', 'src', 'main', 'AndroidManifest.xml');
+  const debugManifest = readMobile('android', 'app', 'src', 'debug', 'AndroidManifest.xml');
+
+  it('declares billing, so in-app products can be created', () => {
+    expect(manifest).toContain('<uses-permission android:name="com.android.vending.BILLING"/>');
+  });
+
+  it('strips the advertising ID, which the Advertising ID declaration says is unused', () => {
+    expect(manifest).toContain('xmlns:tools="http://schemas.android.com/tools"');
+    expect(manifest).toMatch(
+      /android:name="com\.google\.android\.gms\.permission\.AD_ID" tools:node="remove"/,
+    );
+  });
+
+  it.each([
+    'READ_EXTERNAL_STORAGE',
+    'WRITE_EXTERNAL_STORAGE',
+    'READ_MEDIA_IMAGES',
+    'READ_MEDIA_VIDEO',
+    'READ_MEDIA_VISUAL_USER_SELECTED',
+  ])('strips %s, which libraries merge in and the app never uses', (permission) => {
+    expect(manifest).toContain(`android:name="android.permission.${permission}" tools:node="remove"`);
+  });
+
+  it('asks to draw over other apps only in debug builds, for the dev menu', () => {
+    expect(manifest).not.toContain('SYSTEM_ALERT_WINDOW');
+    expect(debugManifest).toContain('android.permission.SYSTEM_ALERT_WINDOW');
+  });
+});
+
 describe('the splash screen paints the same colour on both platforms', () => {
   /**
    * Fixed as part of #160. iOS had drifted to `systemBackgroundColor` — white in

@@ -77,6 +77,13 @@ describe('the film feed knows about its ad slot before it draws', () => {
     expect(feed()).not.toMatch(/getItem\('has_opened_before'\)/);
     expect(feed()).not.toMatch(/setIsFirstSession/);
   });
+
+  it('keeps the placeholder off until an ad network is installed', () => {
+    // An empty box labelled ADVERTISEMENT, in an app whose Play listing
+    // declares no ads, reads to a reviewer as a false declaration.
+    expect(feed()).toMatch(/const AD_SLOT_LIVE = false;/);
+    expect(feed()).toMatch(/\{AD_SLOT_LIVE && showAds && !dropdownOpen \?/);
+  });
 });
 
 describe('the practice path is not drawn before it is anchored', () => {

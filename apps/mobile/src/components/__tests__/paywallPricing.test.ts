@@ -60,6 +60,12 @@ describe('PAYWALL_FEATURES', () => {
       expect(f.desc.length).toBeGreaterThan(0);
     });
   });
+
+  it('does not sell "No ads" while free users see no ads', () => {
+    // Plus listed it while the free tier had nothing to remove, and the Play
+    // listing declares the app ad-free. It comes back with the ad network.
+    expect(PAYWALL_FEATURES.map((f) => f.title)).not.toContain('No ads');
+  });
 });
 
 describe('paywallSubtitle', () => {
