@@ -37,7 +37,14 @@
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { MONO_FAMILY } from '../../theme/fonts';
@@ -85,14 +92,20 @@ interface Props {
   /** Open the arming sheet. The freeze readout is the only entry point to it,
    *  which is why that readout is a control rather than a label. */
   onPressFreezes: () => void;
+  /**
+   * Outer layout only. The header row it shares with the upgrade button sets
+   * its width and margins; its height is not the caller's to change (see
+   * above).
+   */
+  style?: StyleProp<ViewStyle>;
 }
 
-export function StreakWeek({ state, onPressFreezes }: Props) {
+export function StreakWeek({ state, onPressFreezes, style }: Props) {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
 
-  if (!state) return <StreakWeekPlaceholder s={s} t={t} />;
+  if (!state) return <StreakWeekPlaceholder s={s} t={t} style={style} />;
 
   const streak = state.streak;
   const held = state.freezes_held ?? 0;
@@ -100,7 +113,7 @@ export function StreakWeek({ state, onPressFreezes }: Props) {
   const week = state.week ?? [];
 
   return (
-    <View style={s.panel}>
+    <View style={[s.panel, style]}>
       <View style={s.topRow}>
         <StreakFlame size={FLAME} lit={streak > 0} style={s.flame} />
         <Text style={s.streakNumber} numberOfLines={1}>{streak}</Text>
@@ -199,12 +212,14 @@ export function StreakWeek({ state, onPressFreezes }: Props) {
 function StreakWeekPlaceholder({
   s,
   t,
+  style,
 }: {
   s: ReturnType<typeof makeStyles>;
   t: (key: string) => string;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={s.panel} accessibilityLabel={t('practice:streakLoading')}>
+    <View style={[s.panel, style]} accessibilityLabel={t('practice:streakLoading')}>
       <View style={s.topRow}>
         <Skeleton width={FLAME} height={FLAME} radius={FLAME / 2} style={s.flame} />
         <Skeleton width={STREAK_SIZE * 3.4} height={STREAK_SIZE} radius={5} />
@@ -257,7 +272,11 @@ const makeStyles = (tc: ThemeColors) =>
     // The whole readout is one target — count, label and chevron. Tapping the
     // number but not the word beside it would be a 30pt-wide hit area on the
     // only route into the mechanic.
-    freezeButton: { flexDirection: 'row', alignItems: 'center' },
+    //
+    // It shrinks before the row overflows. Beside the upgrade crown on a small
+    // phone, a long freeze word is what runs out of room first, and text that
+    // cannot shrink draws past the border instead of ending in an ellipsis.
+    freezeButton: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
     chevron: { marginStart: 3, marginTop: 1 },
     freezeCount: {
       fontFamily: MONO_FAMILY,
@@ -271,6 +290,7 @@ const makeStyles = (tc: ThemeColors) =>
       fontWeight: '800',
       letterSpacing: 0.6,
       color: tc.textFaint,
+      flexShrink: 1,
     },
 
     strip: { flexDirection: 'row', justifyContent: 'space-between' },

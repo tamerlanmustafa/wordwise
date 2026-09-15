@@ -64,6 +64,7 @@ import {
 } from './common/ConnectionError';
 import { useSlowConnection } from '../hooks/useSlowConnection';
 import { withTap } from '../utils/feedback';
+import { UpgradeButton } from './premium/UpgradeButton';
 
 interface Props {
   /** Whether this tab is the visible one — drives panel reset on leave. */
@@ -421,6 +422,13 @@ function WordFeedScreenInner({
           toast above the glass instead of behind it. */}
       <View style={{ height: m.barSpacer }} />
 
+      {/* The upgrade crown, pinned top-right over the card: the corner every
+          tab puts it in. This screen has no header row, so it floats, centred
+          on the card's CEFR badge row. The rail's lane keeps the card's text
+          out of this column, and it renders before the panel scrim, so an open
+          panel dims it with everything else. */}
+      <UpgradeButton style={[s.upgrade, { top: m.topSpacer + UPGRADE_TOP }]} />
+
       {/* Overlays, siblings of the whole column rather than children of the
           list. They are pinned to the bottom bar — `railBottom` is measured
           from the screen's bottom edge — and the card's frame stops a toast
@@ -546,10 +554,22 @@ function CardSkeleton({ height, s }: { height: number; s: Styles }) {
  *  page to grey. */
 const PANEL_BLUR = 22;
 
+/**
+ * The upgrade crown's offset below the top spacer. It centres the 48pt square
+ * on the card's CEFR badge row: the card's 18pt top padding plus half the
+ * ~21pt badge, less half the square.
+ */
+const UPGRADE_TOP = 5;
+
 type Styles = ReturnType<typeof makeStyles>;
 
 const makeStyles = (tc: ThemeColors) =>
   StyleSheet.create({
+    // Top-right over the card. `top` arrives inline from the measured bands.
+    upgrade: {
+      position: 'absolute',
+      end: 18,
+    },
     // Lighter than a blur-less scrim would need: the blur under it is doing
     // half the work of separating the panel from the card.
     panelScrim: {

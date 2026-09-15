@@ -21,19 +21,23 @@
  *     Each row = 40×60 poster + serif title + year. No footer — the panel is
  *     the whole of search now; there is no results page behind it.
  *   • Recently-viewed dropdown reuses the same row treatment.
- *   • A 64pt filter button on the trailing edge, opening `FeedFilterSheet` —
- *     the same "wide control + square button" pairing the Lists tab uses for
- *     its sort sheet. Neutral at defaults, gold with a count once something is
+ *   • A 64pt filter button after the field, opening `FeedFilterSheet` — the
+ *     same "wide control + square button" pairing the Lists tab uses for its
+ *     sort sheet. Neutral at defaults, gold with a count once something is
  *     filtered, so hidden state stays visible.
+ *   • The upgrade crown on the trailing edge, for a free account: the corner
+ *     every tab puts it in (see `premium/UpgradeButton`). It dims with the
+ *     filter button while the field is focused, and with the field while the
+ *     sheet is open.
  *
- * That button also prints the CEFR level the feed is graded for. The level
- * used to have a 46pt header row of its own holding one gold chip; the chip
- * deserves to be permanently on screen (it is the feed's *scope*), the row did
- * not. It is not part of the filter count — see `activeFilterCount`.
+ * The filter button also prints the CEFR level the feed is graded for. The
+ * level used to have a 46pt header row of its own holding one gold chip; the
+ * chip deserves to be permanently on screen (it is the feed's *scope*), the
+ * row did not. It is not part of the filter count — see `activeFilterCount`.
  *
- * The field shrinks to make room for the button, but the dropdown stays
- * anchored to the full-width wrapper — narrowing it by 72pt would crop the
- * poster rows for no reason.
+ * The field shrinks to make room for the buttons, and the dropdown lines up
+ * with the field rather than the full row (`dropdownEnd`), so it never hangs
+ * off the end of the control it belongs to.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -53,9 +57,23 @@ import { MONO_FAMILY } from '../../theme/fonts';
 import { HomeIcon } from './FilmFeedIcons';
 import { FocusGlow } from './FocusGlow';
 import { feedback, withTap } from '../../utils/feedback';
+import { HEADER_CONTROL } from '../ui/headerControl';
+import { UpgradeButton, useShowsUpgrade } from '../premium/UpgradeButton';
 
 /** The field's corner radius, shared with the glow ring so the two agree. */
-const FIELD_RADIUS = 12;
+const FIELD_RADIUS = HEADER_CONTROL.radius;
+
+/** The filter button's width. Wider than the row is tall, because it prints
+ *  the CEFR level beside its glyph. */
+const FILTER_W = 64;
+
+/**
+ * What each trailing button takes from the row: its width plus the 8pt gap.
+ * The panel under the field lines up with the field, so it gives up the same
+ * room (see `dropdownEnd`).
+ */
+const FILTER_SLOT = FILTER_W + 8;
+const UPGRADE_SLOT = HEADER_CONTROL.size + 8;
 
 /** How many recent films the panel offers. Three, not five: this is a
  *  shortcut back to something you just looked at, and past the third row it
@@ -134,7 +152,11 @@ function Row({
       <View style={s.rowInfo}>
         <Text
           style={[s.rowTitle, unavailable && s.rowTitleDim]}
-          numberOfLines={1}
+          // Two lines, not one. The panel lines up with the field, which gave
+          // its end to the filter button and the upgrade crown, so on a small
+          // phone a long title would lose its last words. Two lines still fit
+          // beside the 60pt poster, so the row does not grow.
+          numberOfLines={2}
         >
           {movie.title}
         </Text>
@@ -244,6 +266,10 @@ export function SearchBar({
   const showAutocomplete = showSuggestions && suggestions.length > 0;
   const showRecent = focused && !query && recentlyViewed.length > 0;
   const filtered = activeFilters > 0;
+  const showsUpgrade = useShowsUpgrade();
+  // The panel lines up with the field, so it gives up exactly the room the
+  // trailing buttons took, and none for a button that is not there.
+  const dropdownEnd = (onFilterPress ? FILTER_SLOT : 0) + (showsUpgrade ? UPGRADE_SLOT : 0);
 
   return (
     <View style={s.wrap}>
@@ -338,10 +364,21 @@ export function SearchBar({
             </TouchableOpacity>
             </Animated.View>
           ) : null}
+
+          {/* Upgrade, at the end of the row. It joins the dim in both
+              directions, for the reason the filter button does: this row
+              paints above the sheet's scrim and the search overlay, so a crown
+              left bright would be the one live control over a screen that has
+              gone behind a panel. A tap then closes whichever panel is open
+              instead of opening a second one over it. */}
+          <UpgradeButton
+            dimmed={focused || filtersOpen}
+            onDismiss={focused ? onDismiss : filtersOpen ? onDismissFilters : undefined}
+          />
         </View>
 
         {showAutocomplete ? (
-          <View style={[s.dropdown, onFilterPress ? s.dropdownInset : null]}>
+          <View style={[s.dropdown, { end: dropdownEnd }]}>
             {suggestions.map((movie: any) => (
               <Row
                 key={movie.id}
@@ -354,7 +391,7 @@ export function SearchBar({
             ))}
           </View>
         ) : showRecent ? (
-          <View style={[s.dropdown, onFilterPress ? s.dropdownInset : null]}>
+          <View style={[s.dropdown, { end: dropdownEnd }]}>
             <Text style={s.recentLabel}>{t('home:search.recentlyViewed')}</Text>
             {recentlyViewed.slice(0, RECENT_LIMIT).map((movie: any) => (
               <Row
@@ -397,7 +434,7 @@ const makeStyles = (tc: ThemeColors) =>
       minWidth: 0,
     },
     field: {
-      height: 48,
+      height: HEADER_CONTROL.size,
       borderRadius: FIELD_RADIUS,
       borderWidth: 1,
       // Never changes on focus — the sweep is the whole of the focus
@@ -425,15 +462,16 @@ const makeStyles = (tc: ThemeColors) =>
     },
     // Wraps the button with its glow ring, the same pairing the field has.
     filterStack: {
-      width: 64,
+      width: FILTER_W,
     },
-    // Same 48pt height as the field so the two read as one control pair — the
-    // treatment ListDetailScreen uses for its sort button. 64 wide rather than
-    // square, because it carries the CEFR code as well as the glyph.
+    // Same height as the field so the two read as one control pair — the
+    // treatment ListDetailScreen uses for its sort button, and the box the
+    // upgrade crown beside it is built on. Wider than square, because it
+    // carries the CEFR code as well as the glyph.
     filterBtn: {
-      width: 64,
-      height: 48,
-      borderRadius: 12,
+      width: FILTER_W,
+      height: HEADER_CONTROL.size,
+      borderRadius: FIELD_RADIUS,
       borderWidth: 1,
       borderColor: tc.border,
       backgroundColor: tc.paper,
@@ -508,14 +546,6 @@ const makeStyles = (tc: ThemeColors) =>
       shadowRadius: 28,
       shadowOffset: { width: 0, height: 18 },
       elevation: 14,
-    },
-    // Aligned to the field rather than to the wrapper. The panel used to span
-    // the full width, including the 64pt filter button beside the field, so it
-    // hung off the end of the control it belongs to. 72 = the button's 64 plus
-    // the 8pt gap; the poster rows have ~285pt left at that width, which is
-    // ample for a 40pt poster and a title.
-    dropdownInset: {
-      end: 72,
     },
     row: {
       flexDirection: 'row',

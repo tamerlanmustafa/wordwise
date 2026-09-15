@@ -88,7 +88,10 @@ describe('the panel never draws "not loaded yet" as facts', () => {
     // for, and the panel below re-lays-out when the data lands.
     const s = panel();
     const ph = s.slice(s.indexOf('function StreakWeekPlaceholder'), s.indexOf('const makeStyles'));
-    expect(ph).toMatch(/style=\{s\.panel\}/);
+    // The caller's layout style rides along on both, so the placeholder takes
+    // exactly the box the loaded panel will.
+    expect(ph).toMatch(/style=\{\[s\.panel, style\]\}/);
+    expect(s).toMatch(/<View style=\{\[s\.panel, style\]\}>/);
     expect(ph).toMatch(/width=\{FLAME\} height=\{FLAME\}/);
     expect(ph).toMatch(/width=\{CELL\} height=\{CELL\}/);
     expect(s).toMatch(/fontSize: STREAK_SIZE/);
@@ -182,5 +185,28 @@ describe('the weekday letters come from the locale files', () => {
     // Sunday-first would draw the right data under the wrong letters — the
     // kind of bug that looks like a data bug for a long time.
     expect(panel()).toMatch(/\['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'\]/);
+  });
+});
+
+describe('the panel makes room for the upgrade crown without spilling', () => {
+  it('takes its width from the header row, never its height', () => {
+    // The crown sits beside it for a free account. Only the width may give;
+    // the height is the load-bearing constant at the top of this file.
+    const s = screen();
+    expect(s).toMatch(
+      /<StreakWeek state=\{displayState\} onPressFreezes=\{openFreezeSheet\} style=\{s\.panel\} \/>/,
+    );
+    const rest = s.slice(s.indexOf('    panel: {'));
+    expect(rest.slice(0, rest.indexOf('},'))).not.toMatch(/height/i);
+  });
+
+  it('lets the freeze readout give way before the row overflows', () => {
+    // 56pt narrower on a free account. On an SE, a four-digit streak beside a
+    // long freeze word ("CONGELACIONES") comes within a point of the border,
+    // and text that cannot shrink draws past it instead of ending in an
+    // ellipsis.
+    const p = panel();
+    expect(p).toMatch(/freezeButton: \{[^}]*flexShrink: 1/);
+    expect(p).toMatch(/freezeLabel: \{[^}]*flexShrink: 1/);
   });
 });

@@ -30,6 +30,7 @@ export {
   HeartIcon,
   FlagIcon,
   SparkleIcon,
+  CrownIcon,
   BoltIcon,
   BlockIcon,
   BrainIcon,

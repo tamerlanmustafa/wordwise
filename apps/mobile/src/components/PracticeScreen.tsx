@@ -61,6 +61,7 @@ import {
 } from './practice/pathCentering';
 import { BackToStartButton } from './practice/BackToStartButton';
 import { StreakWeek, WEEK_PANEL_H } from './practice/StreakWeek';
+import { UpgradeButton } from './premium/UpgradeButton';
 import { carryForward, localIsoDate } from './practice/streakSnapshot';
 import { useStreakSnapshotStore } from '../stores/streakSnapshotStore';
 import { FreezeSheet } from './practice/FreezeSheet';
@@ -362,7 +363,8 @@ function PracticeScreenInner({
       <PracticeBackdrop />
 
       <View style={s.header}>
-        <StreakWeek state={displayState} onPressFreezes={openFreezeSheet} />
+        <StreakWeek state={displayState} onPressFreezes={openFreezeSheet} style={s.panel} />
+        <UpgradeButton style={s.upgrade} />
       </View>
 
       {/* The path, with the active tile centred in what is visible — road
@@ -469,10 +471,25 @@ const makeStyles = (tc: ThemeColors) =>
       // above the path that changes height after first paint moves every tile
       // below it. The numbers are free to change; the box they sit in is not.
       height: HEADER_H,
-      justifyContent: 'center',
-      // No horizontal padding and no row layout: the panel is one full-width
-      // block that owns its own margins. `flex-end` here was the old two-chip
-      // layout, and it left the panel pinned to the right of the screen.
+      // A row: the week panel, then the upgrade crown in the top-right corner
+      // every tab puts it in. The row owns the side margins, so a Plus account
+      // (no crown) gets the same full-width panel it always had.
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 18,
+    },
+    // Takes whatever the row leaves, which is 56pt less for a free account.
+    // The panel's own side margins give way to the row's.
+    panel: {
+      flex: 1,
+      marginHorizontal: 0,
+    },
+    // Top-aligned with the panel rather than centred on it, so it reads as the
+    // same corner button it is on the other tabs.
+    upgrade: {
+      alignSelf: 'flex-start',
+      marginTop: (HEADER_H - WEEK_PANEL_H) / 2,
     },
     // The path and the button that leads back to the active tile. A box of
     // its own so that button is positioned against the path, not the screen.

@@ -229,6 +229,34 @@ export function SparkleIcon({ size = 16, color, style }: AppIconProps) {
 }
 
 // ---------------------------------------------------------------------------
+// CrownIcon — Plus (the upgrade button)
+// ---------------------------------------------------------------------------
+
+export function CrownIcon({ size = 20, color, style }: AppIconProps) {
+  const tc = useThemeColors();
+  const ink = color ?? tc.gold;
+  return (
+    <View style={[{ width: size, height: size }, style]}>
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        {/* Three points, rounded at the joins so it reads as a crown rather
+            than a saw blade at 20pt. */}
+        <Path
+          d="M3.5 8.6 7.8 12 12 5.2l4.2 6.8 4.3-3.4-1.8 8.9H5.3z"
+          fill={ink}
+          stroke={ink}
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+        <Circle cx={3.5} cy={7.3} r={1.6} fill={ink} />
+        <Circle cx={12} cy={3.9} r={1.6} fill={ink} />
+        <Circle cx={20.5} cy={7.3} r={1.6} fill={ink} />
+        <Rect x={5.3} y={19.1} width={13.4} height={2.2} rx={1.1} fill={ink} />
+      </Svg>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // BoltIcon — ⚡ (the quiz-me pill)
 // ---------------------------------------------------------------------------
 

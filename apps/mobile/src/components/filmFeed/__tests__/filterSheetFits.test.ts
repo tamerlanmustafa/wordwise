@@ -28,17 +28,19 @@ import {
   filterSheetHeight,
 } from '../filterSheetMetrics';
 import { navBarMetrics } from '../../navBarMetrics';
+import { HEADER_CONTROL } from '../../ui/headerControl';
 
 const DIR = path.join(__dirname, '..');
 const read = (rel: string) => fs.readFileSync(path.join(DIR, rel), 'utf8');
 
 /**
  * Where the search block ends, below the safe area: SearchBar's 6pt top
- * padding, its 48pt field and its 12pt bottom padding. The filter button in it
- * is drawn above the sheet's scrim on purpose, so the sheet must start below
- * it. Pinned to SearchBar's source further down.
+ * padding, its field (the shared header control height) and its 12pt bottom
+ * padding. The filter and upgrade buttons in it are drawn above the sheet's
+ * scrim on purpose, so the sheet must start below them. Pinned to SearchBar's
+ * source further down.
  */
-const SEARCH_BLOCK = 6 + 48 + 12;
+const SEARCH_BLOCK = 6 + HEADER_CONTROL.size + 12;
 
 interface Phone {
   screenHeight: number;
@@ -126,7 +128,7 @@ describe('the source is the arithmetic', () => {
   it('reads the search block it has to clear from SearchBar', () => {
     const bar = read('SearchBar.tsx');
     expect(bar).toMatch(/wrap: \{[\s\S]*?paddingTop: 6,\s*paddingBottom: 12,/);
-    expect(bar).toMatch(/field: \{\s*height: 48,/);
+    expect(bar).toMatch(/field: \{\s*height: HEADER_CONTROL\.size,/);
   });
 
   it('takes the bottom sheet chrome from the shared numbers', () => {

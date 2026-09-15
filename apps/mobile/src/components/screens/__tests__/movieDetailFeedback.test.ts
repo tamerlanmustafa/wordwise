@@ -33,6 +33,8 @@ const SUBTREE = [
   ['vocabulary', 'WordCardDeck.tsx'],
   ['vocabulary', 'VocabRow.tsx'],
   ['ReportDialog.tsx'],
+  // The upgrade crown MovieDetailHero draws on the backdrop.
+  ['premium', 'UpgradeButton.tsx'],
 ];
 
 const read = (p: string[]) => fs.readFileSync(path.join(SRC, ...p), 'utf8');

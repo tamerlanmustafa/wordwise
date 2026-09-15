@@ -10,7 +10,7 @@
     "filmBand": "NIVEL {{band}}"
   },
   "search": {
-    "placeholder": "Busca películas, palabras o actores…",
+    "placeholder": "Busca películas…",
     "recentlyViewed": "VISITADO RECIENTEMENTE",
     "unavailable": "Aún no disponible"
   },

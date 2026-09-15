@@ -362,21 +362,31 @@ describe('the recently-viewed panel', () => {
   });
 
   it('is inset to the field rather than the full row', () => {
-    // 72 = the 64pt filter button plus the 8pt gap. The panel used to hang off
-    // the end of the control it belongs to.
-    expect(src()).toMatch(/dropdownInset/);
-    expect(src()).toMatch(/end: 72/);
+    // Each trailing button's width plus the 8pt gap: the 64pt filter button,
+    // then the upgrade square. The panel used to hang off the end of the
+    // control it belongs to.
+    const s = src();
+    expect(s).toMatch(/const FILTER_SLOT = FILTER_W \+ 8;/);
+    expect(s).toMatch(/const UPGRADE_SLOT = HEADER_CONTROL\.size \+ 8;/);
+    expect(s).toMatch(
+      /const dropdownEnd = \(onFilterPress \? FILTER_SLOT : 0\) \+ \(showsUpgrade \? UPGRADE_SLOT : 0\);/,
+    );
   });
 
   it('insets the autocomplete panel identically', () => {
     // Both occupy the same slot. One narrow and one full-width would read as a
     // bug rather than as a distinction.
-    const applications = src().match(/s\.dropdownInset/g) ?? [];
+    const applications = src().match(/\[s\.dropdown, \{ end: dropdownEnd \}\]/g) ?? [];
     expect(applications.length).toBe(2);
   });
 
-  it('does not inset when there is no filter button to make room for', () => {
-    expect(src()).toMatch(/onFilterPress \? s\.dropdownInset : null/);
+  it('gives back only the room a button actually took', () => {
+    // No filter button, no filter slot. A Plus account has no crown, so the
+    // panel is not pulled in for a button that is not there.
+    const s = src();
+    expect(s).toMatch(/onFilterPress \? FILTER_SLOT : 0/);
+    expect(s).toMatch(/showsUpgrade \? UPGRADE_SLOT : 0/);
+    expect(s).toMatch(/const showsUpgrade = useShowsUpgrade\(\);/);
   });
 });
 

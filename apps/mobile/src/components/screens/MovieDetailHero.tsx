@@ -20,6 +20,8 @@ import { cefrColorFor, cefrRampFor } from '../../theme/cefrRamp';
 import { BACK_ROW, HERO_PLATE, HERO_PLATE_GAP_COMPACT } from '../vocabulary/deckMetrics';
 import { LevelRing } from '../filmFeed/LevelRing';
 import type { FilmVocabulary } from '../filmFeed/filmVocabulary';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { UpgradeButton } from '../premium/UpgradeButton';
 
 /**
  * MovieDetailHero — the movie stated once, in a block that never moves.
@@ -111,6 +113,9 @@ export const MovieDetailHero = ({
   const scheme = useColorScheme();
   const s = useMemo(() => makeStyles(tc, scheme), [tc, scheme]);
 
+  // For the upgrade crown's corner. It sits outside the content's flow, so it
+  // cannot lean on the top padding the screen hands in through `style`.
+  const insets = useSafeAreaInsets();
   const tier = movieTitleTier(title);
   const bandColor = cefrColorFor(level ?? '', cefrRampFor(tc));
 
@@ -216,6 +221,13 @@ export const MovieDetailHero = ({
             ) : null}
           </View>
         </View>
+
+        {/* The upgrade crown, top-right on the backdrop: the corner every tab
+            puts it in. Absolute, so the deck column's budget does not move —
+            at 48pt it is taller than the 34pt back row, and a child spilling
+            past its row takes no touches on Android. Its top lines up with the
+            back button's. */}
+        <UpgradeButton style={[s.upgrade, { top: insets.top + BACK_ROW.gap }]} />
       </View>
     </>
   );
@@ -241,6 +253,12 @@ const makeStyles = (tc: ThemeColors, scheme: 'light' | 'dark') => {
     },
     content: {
       paddingHorizontal: 18,
+    },
+    // Pinned to the content's trailing edge, outside the column's layout.
+    // `top` arrives inline from the safe area.
+    upgrade: {
+      position: 'absolute',
+      end: 18,
     },
     backRow: {
       height: BACK_ROW.height,

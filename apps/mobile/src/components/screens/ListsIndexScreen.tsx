@@ -42,6 +42,7 @@ import { useListsStore, subscribeToReel } from '../../stores/listsStore';
 import { track } from '../../services/analytics';
 import type { ListKind, ListSummary } from '../../core/types';
 import { withTap } from '../../utils/feedback';
+import { UpgradeButton } from '../premium/UpgradeButton';
 
 /**
  * Rows mounted before the list waits for a scroll.
@@ -255,15 +256,20 @@ function ListsIndexScreenInner({ active, onOpenList, bottomOffset }: Props) {
     <TopInsetView style={s.container}>
       <View style={s.header}>
         <Text style={s.title}>{t('title')}</Text>
-        <TouchableOpacity
-          style={s.addBtn}
-          onPress={withTap(() => setSheetOpen(true))}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={t('new.title')}
-        >
-          <Text style={s.addGlyph}>+</Text>
-        </TouchableOpacity>
+        {/* The + and then the upgrade crown: the top-right corner every tab
+            puts it in. */}
+        <View style={s.headerActions}>
+          <TouchableOpacity
+            style={s.addBtn}
+            onPress={withTap(() => setSheetOpen(true))}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('new.title')}
+          >
+            <Text style={s.addGlyph}>+</Text>
+          </TouchableOpacity>
+          <UpgradeButton />
+        </View>
       </View>
 
       <View style={s.segmentWrap}>
@@ -329,6 +335,8 @@ const makeStyles = (tc: ThemeColors) => StyleSheet.create({
     paddingBottom: 14,
   },
   title: { ...screenTitle, color: tc.text },
+  // The + and the upgrade crown, side by side at the trailing edge.
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   addBtn: {
     width: METRICS.circleBtn,
     height: METRICS.circleBtn,

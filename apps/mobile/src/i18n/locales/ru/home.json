@@ -10,7 +10,7 @@
     "filmBand": "УРОВЕНЬ {{band}}"
   },
   "search": {
-    "placeholder": "Поиск фильмов, слов или актёров…",
+    "placeholder": "Поиск фильмов…",
     "recentlyViewed": "ПОСЛЕДНИЕ ПРОСМОТРЫ",
     "unavailable": "Пока недоступен"
   },
