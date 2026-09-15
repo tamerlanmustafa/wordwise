@@ -43,10 +43,18 @@ jobs:
         run: npm run build
 
       # GitHub Pages has no SPA rewrite; serving index.html as the 404 page
-      # keeps deep links (/wordwise/privacy, /wordwise/terms, ...) rendering.
-      - name: Add SPA fallback
+      # keeps deep links rendering in a browser. It does so with a 404 status,
+      # though, and the app stores check the privacy, terms and account-deletion
+      # links automatically, so those three get a real copy of index.html each
+      # and answer 200.
+      - name: Add SPA fallback and store pages
         working-directory: ./frontend
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          for page in privacy terms delete-account; do
+            mkdir -p "dist/$page"
+            cp dist/index.html "dist/$page/index.html"
+          done
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
