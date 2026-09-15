@@ -261,7 +261,9 @@ export default function App() {
   // first paint — measured on the first tap after a cold start: Practice drew
   // an empty path for ~110ms, and the film feed drew ~300ms of skeleton rows in
   // front of a page that was on disk. Keyed on the account because both caches
-  // are per account; each is a disk read, and neither sends a request.
+  // are per account. Both are disk reads — except that the film feed also
+  // fetches its current Recommended shelf when the saved one has rotated, so
+  // the tab opens on it instead of swapping to it (see primeCefrMoviesCache).
   const signedInId = user?.id ?? null;
   const profileLevel = user?.proficiency_level || DEFAULT_LEVEL;
   useEffect(() => {
@@ -271,8 +273,10 @@ export default function App() {
   useEffect(() => {
     if (signedInId === null) return;
     // The same level `useFeedLevel` will open the feed on.
-    void primeCefrMoviesCache(profileLevel).then((page) => {
-      for (const movie of (page ?? []).slice(0, 6)) {
+    // Warms the pictures of every page it puts in memory: the saved shelf, and
+    // the current one if it had to fetch it.
+    void primeCefrMoviesCache(profileLevel, (movies) => {
+      for (const movie of movies.slice(0, 6)) {
         const uri = cardBackdropUri(movie);
         if (uri) Image.prefetch(uri).catch(() => {});
       }

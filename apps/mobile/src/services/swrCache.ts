@@ -87,6 +87,13 @@ export function clearCacheMemory(): void {
   generation += 1;
 }
 
+/** Which sign-in the memory belongs to. Bumped by {@link clearCacheMemory}, so
+ *  a request that started under one value can tell it must not store its
+ *  answer under another — the page would be the previous account's. */
+export function cacheGeneration(): number {
+  return generation;
+}
+
 /** Write data to the cache. Best-effort — never throws. */
 export async function writeCache<T>(key: string, data: T): Promise<void> {
   const wrapped: Wrapped<T> = { data, savedAt: Date.now() };

@@ -6,9 +6,9 @@ jest.mock('../../services/api', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { primeCefrMoviesCache, useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
+import { drawHasRotated, primeCefrMoviesCache, useInfiniteCefrMovies } from '../useInfiniteCefrMovies';
 import { wordwiseApi, enrichMoviesWithTmdb } from '../../services/api';
-import { clearCacheMemory } from '../../services/swrCache';
+import { clearCacheMemory, peekCache, writeCache } from '../../services/swrCache';
 import { renderHook, flushAsync, act, cleanupHooks } from '../../test-utils/renderHook';
 import { DEFAULT_FEED_FILTERS, type MovieType } from '../../components/filmFeed/filterOptions';
 
@@ -329,10 +329,12 @@ describe('useInfiniteCefrMovies', () => {
   // from TMDB. The cache paints last session's page immediately and lets the
   // live request replace it.
   //
-  // The rule that matters is that the cache is **paint only**: it must never
-  // supply an offset or a seed. `sort=recommended` pages through a seeded
-  // shuffle, so a cached seed would page through a draw the server has since
-  // rotated away from — duplicating some films and skipping others, silently.
+  // Two rules matter. The cache never supplies an offset: the live page 0
+  // replaces the painted one before anything appends. And a painted
+  // Recommended page is never reshuffled on screen: the live request asks for
+  // the draw it painted, and a rotated draw that the request has already outrun
+  // is not painted at all. Every page of a scroll still sends one seed, so
+  // paging an older draw is exactly as coherent as paging the current one.
   describe('the cached first page', () => {
     /** Load once so a page 0 is cached, then throw the hook away. */
     const seedCache = async (movies = [{ tmdb_id: 1, title: 'Cached' }]) => {
@@ -391,26 +393,126 @@ describe('useInfiniteCefrMovies', () => {
       expect(result.current.loading).toBe(true); // skeleton, correctly
     });
 
-    it('never sends a seed or an offset it read from disk', async () => {
-      // The corruption guard. The cached page is pixels, not pagination.
-      await seedCache();
-      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 5, title: 'Fresh' }], true, 42));
+    const RECOMMENDED_B1 = 'movies.byCefr.B1.recommended.desc.all';
+    /** A Recommended page on disk, from a draw that is still open or not. */
+    const drawOnDisk = async (title: string, seed: number, rotated: boolean) => {
+      await AsyncStorage.setItem(
+        `swr_${RECOMMENDED_B1}`,
+        JSON.stringify({
+          data: {
+            movies: [{ tmdb_id: seed, title }],
+            seed,
+            nextRotationAt: new Date(Date.now() + (rotated ? -1 : 1) * 3600_000).toISOString(),
+          },
+          savedAt: Date.now(),
+        }),
+      );
+    };
+
+    it('asks for the draw it painted, so the answer keeps the order on screen', async () => {
+      // The swap this prevents: a page cached in one three-hour window, painted
+      // in the next, and replaced a second later by a reshuffled shelf.
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'Saved' }], true, 41));
+      renderHook(() => useInfiniteCefrMovies('B1', 'recommended', 'desc'));
+      await flushAsync();
+      cleanupHooks();
+      jest.clearAllMocks();
+      (enrichMoviesWithTmdb as jest.Mock).mockImplementation(async (rows: unknown[]) => rows);
+
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 1, title: 'Saved' }], true, 41));
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+      // The draw from disk, but never the offset: the live page 0 replaces the
+      // painted one before anything appends.
+      expect(mockGet.mock.calls[0][2]).toMatchObject({ offset: 0, seed: 41 });
+
+      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 2, title: 'Next' }], false, 41));
+      await act(async () => {
+        result.current.loadMore();
+        await Promise.resolve();
+      });
+      // One seed from the first page of the scroll to the last.
+      expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 1, seed: 41 });
+    });
+
+    it('does not paint a rotated draw that the request would only reshuffle', async () => {
+      // Nothing in memory, so the request goes out before the disk answers —
+      // for the current draw. An older draw read back afterwards would be
+      // swapped the moment that answer landed, so the skeleton stays.
+      await drawOnDisk('Old draw', 40, true);
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
 
       const { result } = renderHook(() =>
         useInfiniteCefrMovies('B1', 'recommended', 'desc'),
       );
       await flushAsync();
 
-      expect(mockGet.mock.calls[0][2]).toMatchObject({ offset: 0 });
+      expect(result.current.movies).toEqual([]);
+      expect(result.current.loading).toBe(true);
       expect(mockGet.mock.calls[0][2].seed).toBeUndefined();
+    });
 
-      mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 6, title: 'Next' }], false, 42));
-      await act(async () => {
-        result.current.loadMore();
-        await Promise.resolve();
+    it('still paints a saved draw that is current', async () => {
+      await drawOnDisk('This window', 40, false);
+      mockGet.mockReturnValueOnce(new Promise(() => {}));
+
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['This window']);
+    });
+
+    it('shows a rotated draw after all once the network has failed', async () => {
+      // Offline, a stale shelf still beats an empty screen — and there is no
+      // answer left to reshuffle it.
+      await drawOnDisk('Old draw', 40, true);
+      mockGet.mockRejectedValueOnce(new Error('offline'));
+
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Old draw']);
+    });
+
+    it('does not let an older draw overwrite a newer one it finds in memory', async () => {
+      // A tab opened before the launch refresh landed asks for the draw it
+      // painted. If that refresh has since stored the next draw, the tab's
+      // answer must not put the older shelf back for the next launch.
+      const hour = 3600_000;
+      await writeCache(RECOMMENDED_B1, {
+        movies: [{ tmdb_id: 1, title: 'Older draw' }],
+        seed: 42,
+        nextRotationAt: new Date(Date.now() - hour).toISOString(),
       });
-      // The append pages through the draw the *server* just handed us.
-      expect(mockGet.mock.calls[1][2]).toMatchObject({ offset: 1, seed: 42 });
+      let answer!: (value: unknown) => void;
+      mockGet.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+
+      const { result } = renderHook(() =>
+        useInfiniteCefrMovies('B1', 'recommended', 'desc'),
+      );
+      await flushAsync();
+      expect(mockGet.mock.calls[0][2].seed).toBe(42);
+
+      await writeCache(RECOMMENDED_B1, {
+        movies: [{ tmdb_id: 9, title: 'Newer draw' }],
+        seed: 43,
+        nextRotationAt: new Date(Date.now() + hour).toISOString(),
+      });
+      await act(async () => {
+        answer(draw([{ tmdb_id: 1, title: 'Older draw' }], true, 42));
+      });
+      await flushAsync();
+
+      // The screen keeps the shelf it showed…
+      expect(result.current.movies.map((m) => m.title)).toEqual(['Older draw']);
+      // …and the next launch opens on the newer one.
+      expect(peekCache<{ seed: number }>(RECOMMENDED_B1)?.seed).toBe(43);
     });
 
     it('cannot append while only the cache has painted', async () => {
@@ -453,9 +555,30 @@ describe('useInfiniteCefrMovies', () => {
   // and the hook starts from memory.
   describe('primed at launch', () => {
     const order = DEFAULT_FEED_FILTERS.sortAsc ? 'asc' : 'desc';
-    const onDisk = async (level: string, movies: unknown[], sort: string = DEFAULT_FEED_FILTERS.sort) => {
-      const key = `swr_movies.byCefr.${level}.${sort}.${order}.${DEFAULT_FEED_FILTERS.movieType}`;
-      await AsyncStorage.setItem(key, JSON.stringify({ data: movies, savedAt: Date.now() }));
+    const defaultKey = (level: string) =>
+      `movies.byCefr.${level}.${DEFAULT_FEED_FILTERS.sort}.${order}.${DEFAULT_FEED_FILTERS.movieType}`;
+    /** A saved page 0 for the feed's default filters. Its draw is `current`
+     *  unless a test says otherwise, because priming a rotated draw sends a
+     *  request. `legacy` is the bare list stored before the draw was. */
+    const onDisk = async (
+      level: string,
+      movies: unknown[],
+      state: 'current' | 'rotated' | 'legacy' = 'current',
+    ) => {
+      const data =
+        state === 'legacy'
+          ? movies
+          : {
+              movies,
+              seed: 7,
+              nextRotationAt: new Date(
+                Date.now() + (state === 'current' ? 1 : -1) * 3600_000,
+              ).toISOString(),
+            };
+      await AsyncStorage.setItem(
+        `swr_${defaultKey(level)}`,
+        JSON.stringify({ data, savedAt: Date.now() }),
+      );
     };
     /** Every `loading` value the hook ever rendered, in order. */
     const renderRecording = (level: string, sort = DEFAULT_FEED_FILTERS.sort) => {
@@ -525,6 +648,173 @@ describe('useInfiniteCefrMovies', () => {
       await flushAsync();
       expect(result.current.movies).toEqual([]);
       (Date.now as jest.Mock).mockRestore();
+    });
+
+    // ── A saved shelf from an earlier window ──────────────────────────────
+    //
+    // Recommended rotates every three hours. Painting an older draw and then
+    // letting the live answer replace it was a visible swap a second after the
+    // tab opened, on every cold start after a rotation.
+    describe('when the saved shelf is from an earlier window', () => {
+      it('fetches the current draw at launch, so the tab opens on it', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Old shelf' }], 'rotated');
+        mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 9, title: 'Current shelf' }], true, 8));
+
+        await primeCefrMoviesCache('A1');
+        await flushAsync();
+
+        // The current window: the feed's default filters, first page, no seed.
+        expect(mockGet).toHaveBeenCalledTimes(1);
+        expect(mockGet.mock.calls[0][0]).toBe('A1');
+        expect(mockGet.mock.calls[0][2]).toMatchObject({ offset: 0, sort: DEFAULT_FEED_FILTERS.sort });
+        expect(mockGet.mock.calls[0][2].seed).toBeUndefined();
+
+        mockGet.mockReturnValueOnce(new Promise(() => {}));
+        const { result, loadingSeen } = renderRecording('A1');
+        // The first frame is already the current shelf…
+        expect(result.current.movies.map((m) => m.title)).toEqual(['Current shelf']);
+        expect(loadingSeen[0]).toBe(false);
+        await flushAsync();
+        // …and the tab's own request asks for that same draw.
+        expect(mockGet.mock.calls[1][2].seed).toBe(8);
+      });
+
+      it('keeps the shelf on screen when the tab opens before that fetch lands', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Old shelf' }], 'rotated');
+        let landRefresh!: (value: unknown) => void;
+        mockGet.mockReturnValueOnce(new Promise((resolve) => { landRefresh = resolve; }));
+        await primeCefrMoviesCache('A1');
+
+        let answerTab!: (value: unknown) => void;
+        mockGet.mockReturnValueOnce(new Promise((resolve) => { answerTab = resolve; }));
+        const { result } = renderRecording('A1');
+        await flushAsync();
+        expect(result.current.movies.map((m) => m.title)).toEqual(['Old shelf']);
+        // The tab asks for the draw it painted…
+        expect(mockGet.mock.calls[1][2].seed).toBe(7);
+
+        // …the launch fetch lands with the next draw, and nothing on screen moves…
+        await act(async () => {
+          landRefresh(draw([{ tmdb_id: 9, title: 'Current shelf' }], true, 8));
+        });
+        await flushAsync();
+        expect(result.current.movies.map((m) => m.title)).toEqual(['Old shelf']);
+
+        // …the tab's own answer keeps the order it had…
+        await act(async () => {
+          answerTab(draw([{ tmdb_id: 1, title: 'Old shelf' }], true, 7));
+        });
+        await flushAsync();
+        expect(result.current.movies.map((m) => m.title)).toEqual(['Old shelf']);
+
+        // …and the next launch opens on the current shelf, without asking again.
+        mockGet.mockClear();
+        const nextLaunch = await primeCefrMoviesCache('A1');
+        expect(nextLaunch?.map((m) => m.title)).toEqual(['Current shelf']);
+        expect(mockGet).not.toHaveBeenCalled();
+      });
+
+      it('does not paint a page saved before draws were recorded — nothing could keep its order', async () => {
+        // Measured on an iPhone SE when this first landed: a legacy page painted
+        // on a fast tap was swapped for the current shelf 270ms later, because
+        // the tab had no draw to ask for. A skeleton once beats that swap.
+        await onDisk('A1', [{ id: 1, title: 'Legacy' }], 'legacy');
+        let land!: (value: unknown) => void;
+        mockGet.mockReturnValueOnce(new Promise((resolve) => { land = resolve; }));
+        await primeCefrMoviesCache('A1');
+
+        mockGet.mockReturnValueOnce(new Promise(() => {}));
+        const { result, loadingSeen } = renderRecording('A1');
+        expect(result.current.movies).toEqual([]);
+        expect(loadingSeen[0]).toBe(true);
+        await flushAsync();
+        // Not from disk a moment later either.
+        expect(result.current.movies).toEqual([]);
+
+        await act(async () => {
+          land(draw([{ tmdb_id: 9, title: 'Current shelf' }], true, 8));
+        });
+        await flushAsync();
+      });
+
+      it('treats a page saved before draws were recorded as rotated', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Legacy' }], 'legacy');
+        mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 9, title: 'Current shelf' }], true, 8));
+
+        await primeCefrMoviesCache('A1');
+        await flushAsync();
+
+        expect(mockGet).toHaveBeenCalledTimes(1);
+      });
+
+      it('warms the pictures of each page it puts in memory', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Old shelf' }], 'rotated');
+        mockGet.mockResolvedValueOnce(draw([{ tmdb_id: 9, title: 'Current shelf' }], true, 8));
+        const warmed: string[][] = [];
+
+        await primeCefrMoviesCache('A1', (movies) => warmed.push(movies.map((m) => m.title)));
+        await flushAsync();
+
+        expect(warmed).toEqual([['Old shelf'], ['Current shelf']]);
+      });
+
+      it('keeps the saved shelf when that fetch fails', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Old shelf' }], 'rotated');
+        mockGet.mockRejectedValueOnce(new Error('offline'));
+
+        await primeCefrMoviesCache('A1');
+        await flushAsync();
+
+        expect(await primeCefrMoviesCache('A1')).toEqual([{ id: 1, title: 'Old shelf' }]);
+        mockGet.mockReturnValueOnce(new Promise(() => {}));
+      });
+
+      it('does not store the page if the account signed out while it was in flight', async () => {
+        await onDisk('A1', [{ id: 1, title: 'Old shelf' }], 'rotated');
+        let land!: (value: unknown) => void;
+        mockGet.mockReturnValueOnce(new Promise((resolve) => { land = resolve; }));
+        await primeCefrMoviesCache('A1');
+
+        clearCacheMemory(); // what sign-out does
+        await act(async () => {
+          land(draw([{ tmdb_id: 9, title: 'Previous account' }], true, 8));
+        });
+        await flushAsync();
+
+        expect(peekCache(defaultKey('A1'))).toBeNull();
+      });
+    });
+
+    describe('when there is nothing to rotate', () => {
+      it('sends no request when the saved draw is still current', async () => {
+        await onDisk('A1', [{ id: 1, title: 'This window' }]);
+        await primeCefrMoviesCache('A1');
+        await flushAsync();
+        expect(mockGet).not.toHaveBeenCalled();
+      });
+
+      it('sends no request when nothing was saved', async () => {
+        await primeCefrMoviesCache('A1');
+        await flushAsync();
+        expect(mockGet).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('drawHasRotated', () => {
+    const now = Date.parse('2026-09-15T12:00:00Z');
+
+    it('is false while the draw’s window is open', () => {
+      expect(drawHasRotated({ seed: 1, nextRotationAt: '2026-09-15T15:00:00Z' }, now)).toBe(false);
+    });
+
+    it('is true from the instant the window closes', () => {
+      expect(drawHasRotated({ seed: 1, nextRotationAt: '2026-09-15T12:00:00Z' }, now)).toBe(true);
+    });
+
+    it('is true when no draw was recorded, or the time is unreadable', () => {
+      expect(drawHasRotated({ seed: null, nextRotationAt: null }, now)).toBe(true);
+      expect(drawHasRotated({ seed: 1, nextRotationAt: 'not a date' }, now)).toBe(true);
     });
   });
 });

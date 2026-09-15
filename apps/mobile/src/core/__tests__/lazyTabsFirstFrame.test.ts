@@ -29,7 +29,7 @@ describe('launch reads what the lazy tabs open on', () => {
   });
 
   it('primes the film feed at the level the feed will open on', () => {
-    expect(app()).toMatch(/primeCefrMoviesCache\(profileLevel\)/);
+    expect(app()).toMatch(/primeCefrMoviesCache\(profileLevel,/);
     // `useFeedLevel` falls back to DEFAULT_LEVEL; a different fallback here
     // would prime a page nobody asks for.
     expect(app()).toMatch(/user\?\.proficiency_level \|\| DEFAULT_LEVEL/);
@@ -44,9 +44,12 @@ describe('launch reads what the lazy tabs open on', () => {
       .toMatch(/const backdropUri = cardBackdropUri\(movie\);/);
   });
 
-  it('sends no request to do it', () => {
-    // The hook's docblock rejects prefetching the feed at boot because it
-    // spends an API call on every launch. Priming is a disk read.
+  it('sends a request only when the saved shelf has rotated', () => {
+    // Priming is a disk read. The one exception is a Recommended page whose
+    // three-hour draw has rotated since it was saved: without fetching the
+    // current one behind the tab, the tab opened on the old shelf and swapped
+    // to the new one a second later. The request is gated on exactly that, so
+    // a launch whose saved shelf is current still costs the API nothing.
     const hook = read('hooks', 'useInfiniteCefrMovies.ts');
     const prime = hook.slice(
       hook.indexOf('export async function primeCefrMoviesCache'),
@@ -54,6 +57,9 @@ describe('launch reads what the lazy tabs open on', () => {
     );
     expect(prime).toMatch(/readCache/);
     expect(prime).not.toMatch(/wordwiseApi|enrichMoviesWithTmdb|fetch\(/);
+    expect(prime).toMatch(
+      /if \(saved && filter\.sort === 'recommended' && drawHasRotated\(saved\)\) \{\s*void refreshPage\(/,
+    );
   });
 });
 
