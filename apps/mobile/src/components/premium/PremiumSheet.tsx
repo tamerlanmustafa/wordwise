@@ -10,11 +10,31 @@
  * purchase path as `PaywallScreen`. A second checkout would be a second place
  * for receipts, restores and trial eligibility to drift.
  *
+ * ## It does not scroll
+ *
+ * The whole pitch fits on the smallest phones we ship to: every block states
+ * its height in `premiumSheetMetrics`, and a test holds the sum against real
+ * screens. It used to scroll. Each feature carried a line of description, and
+ * the bottom was padded by the tab bar's height for a bar this sheet is drawn
+ * over, so on an iPhone SE the plans, the buy button and the way out all sat
+ * below the fold. `PaywallScreen` is a full page and keeps the descriptions;
+ * the sheet shows each feature as its title.
+ *
+ * Not scrolling is also what lets the whole sheet be the drag handle. There is
+ * no scroll view inside it to fight a downward pull.
+ *
+ * Only the three full-width blocks whose length depends on the language — the
+ * headline, the subtitle and the renewal terms — shrink to fit. The short
+ * labels inside the cards and buttons do not: on a 3x iPhone, `/year` inside a
+ * centred plan card shrank to about 5pt while the same card looked right on a
+ * 2x SE.
+ *
  * ## Opening is the easy half; closing is where the bugs are
  *
- * Every exit runs through `dismiss()`: the scrim, the Later button, a
- * successful purchase, and the Android back button. Each one has to leave the
- * sheet in a state the NEXT open can trust, which is why:
+ * Every exit runs through `dismiss()`: the scrim, a pull down, the Later
+ * button, a successful purchase, VoiceOver's escape gesture and the Android
+ * back button. Each one has to leave the sheet in a state the NEXT open can
+ * trust, which is why:
  *
  *   * **The exit animation finishes before the content unmounts.** `rendered`
  *     is local state that goes false in the spring's completion callback, not
@@ -24,21 +44,38 @@
  *     cleared on the way out and checked after every await. Without it, a
  *     purchase that resolves after the user dismissed would set `busy`, or pop
  *     a success alert over a screen they had already moved on from.
- *   * **`plan` and `busy` reset on OPEN, not on close.** Resetting on close
- *     would rewrite the plan cards to the default while they are still sliding
- *     down, in full view.
+ *   * **`plan`, `busy` and the pull reset on OPEN, not on close.** Resetting
+ *     on close would rewrite the plan cards to the default while they are
+ *     still sliding down, in full view, and would snap a sheet pulled halfway
+ *     down back to the top on its way out.
  *   * **The scrim stops taking touches when hidden.** `pointerEvents` on the
  *     wrapper, not opacity alone: a transparent overlay still swallows every
  *     tap on the tab behind it, and the symptom — "the app froze" — points
  *     nowhere near this file.
  *
+ * ## Pulling it closed
+ *
+ * The sheet follows the finger down and resists going up. Letting go past a
+ * quarter of its height (at most 120pt), or flicking down, closes it; anything
+ * else springs back. The thresholds are pure and live in `utils/sheetDismiss`,
+ * the arrangement the toast's swipe uses.
+ *
+ * The drag is claimed in the capture phase, so a pull that starts on a plan
+ * card or on the buy button still moves the sheet, and cancels that press: a
+ * pull is not a choice of plan. A tap does not travel, so it still reaches the
+ * button.
+ *
+ * A pull does not buzz. The finger was on the glass the whole way, and the
+ * toast's swipe-away is silent for the same reason; the tap exits keep theirs.
+ *
  * ## Motion
  *
  * Spring up, spring down, both on the native driver so the animation survives
  * a busy JS thread — this app has no Reanimated, so anything on the JS thread
- * stutters under exactly the render work an opening sheet causes. Reduce-motion
- * skips the travel and cross-fades instead, because the point of the setting is
- * vestibular comfort, not "no feedback".
+ * stutters under exactly the render work an opening sheet causes. The pull is
+ * a second value added to that travel, so a drag during the entrance never
+ * fights the spring. Reduce-motion skips the travel and cross-fades instead,
+ * because the point of the setting is vestibular comfort, not "no feedback".
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,7 +84,7 @@ import {
   Animated,
   BackHandler,
   Easing,
-  ScrollView,
+  PanResponder,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -62,9 +99,15 @@ import { useIsPremium } from '../../stores/entitlementsStore';
 import { purchaseProduct, restorePurchases, PRODUCTS } from '../../services/billing';
 import { useThemeColors, type ThemeColors } from '../../theme/tokens';
 import { SERIF_FAMILY } from '../../theme/fonts';
-import { useBottomBarInset } from '../../hooks/useBottomBarInset';
+import { directionSign } from '../../i18n/rtl';
 import { withTap } from '../../utils/feedback';
+import {
+  sheetDismissOnRelease,
+  sheetDragOffset,
+  shouldClaimSheetDrag,
+} from '../../utils/sheetDismiss';
 import { PressablePill } from '../ui/PressablePill';
+import { PREMIUM_SHEET } from './premiumSheetMetrics';
 import {
   PAYWALL_FEATURES,
   annualSavingsPercent,
@@ -92,12 +135,14 @@ type Plan = 'annual' | 'monthly' | 'lifetime';
  *  first frame is off-screen even before layout has reported a height. */
 const OFFSCREEN = 1000;
 
+/** The footer links are one short line of small text; this is their tap area. */
+const FOOTER_HIT = { top: 10, bottom: 10, left: 10, right: 10 };
+
 export function PremiumSheet() {
   const { t } = useTranslation();
   const tc = useThemeColors();
   const s = useMemo(() => makeStyles(tc), [tc]);
   const insets = useSafeAreaInsets();
-  const barInset = useBottomBarInset();
   const reduceMotion = useReduceMotion();
 
   const visible = usePremiumSheetStore((st) => st.visible);
@@ -116,16 +161,22 @@ export function PremiumSheet() {
   const liveRef = useRef(false);
 
   const anim = useRef(new Animated.Value(0)).current;
+  /** The pull, added to the open/close travel rather than written into it. */
+  const drag = useRef(new Animated.Value(0)).current;
+  /** Measured on layout, for the release threshold. Zero until then. */
+  const sheetHeight = useRef(0);
 
   useEffect(() => {
     if (visible) {
       // Fresh open: reset the controls BEFORE the first painted frame, so the
-      // sheet never slides up showing the previous session's selection.
+      // sheet never slides up showing the previous session's selection — or
+      // sitting where the last pull left it.
       setRendered(true);
       setPlan('annual');
       setBusy(false);
       liveRef.current = true;
       anim.setValue(0);
+      drag.setValue(0);
       Animated.spring(anim, {
         toValue: 1,
         useNativeDriver: true,
@@ -148,12 +199,49 @@ export function PremiumSheet() {
       // just asked for.
       if (finished) setRendered(false);
     });
-  }, [visible, rendered, anim, reduceMotion]);
+  }, [visible, rendered, anim, drag, reduceMotion]);
 
   const dismiss = useCallback(() => {
     liveRef.current = false;
     close();
   }, [close]);
+
+  /** A pull that did not close: back to rest. */
+  const settle = useCallback(() => {
+    if (reduceMotion) {
+      Animated.timing(drag, { toValue: 0, duration: 120, useNativeDriver: true }).start();
+      return;
+    }
+    Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 20 }).start();
+  }, [drag, reduceMotion]);
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        // Logical dx, as every gesture in the app reads it. The claim only
+        // compares its size against dy, so the mirroring never changes the
+        // answer — but a raw dx here is the shape the RTL guard exists to catch.
+        onMoveShouldSetPanResponder: (_e, g) => shouldClaimSheetDrag(g.dx * directionSign, g.dy),
+        onMoveShouldSetPanResponderCapture: (_e, g) =>
+          shouldClaimSheetDrag(g.dx * directionSign, g.dy),
+        // Once the sheet has the drag, a button under the finger cannot take it back.
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_e, g) => {
+          drag.setValue(sheetDragOffset(g.dy));
+        },
+        onPanResponderRelease: (_e, g) => {
+          if (sheetDismissOnRelease(g.dy, g.vy, sheetHeight.current)) {
+            // The exit starts from wherever the finger let go: `drag` holds
+            // its offset and the close travel adds to it.
+            dismiss();
+            return;
+          }
+          settle();
+        },
+        onPanResponderTerminate: () => settle(),
+      }),
+    [drag, dismiss, settle],
+  );
 
   // Android's back button is an exit like any other, and one that is easy to
   // forget: without this it would pop the screen BEHIND the sheet, leaving the
@@ -225,12 +313,15 @@ export function PremiumSheet() {
         ? t('billing:paywall.hintTrial', { price: MONTHLY_PRICE_LABEL })
         : t('billing:paywall.hintAnnual', { price: ANNUAL_PRICE_LABEL });
   const savings = annualSavingsPercent();
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    // Reduce-motion still fades, but travels a token distance rather than the
-    // full height — motion sensitivity is about large displacement.
-    outputRange: [reduceMotion ? 24 : OFFSCREEN, 0],
-  });
+  const translateY = Animated.add(
+    anim.interpolate({
+      inputRange: [0, 1],
+      // Reduce-motion still fades, but travels a token distance rather than the
+      // full height — motion sensitivity is about large displacement.
+      outputRange: [reduceMotion ? 24 : OFFSCREEN, 0],
+    }),
+    drag,
+  );
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? 'auto' : 'none'}>
@@ -241,146 +332,181 @@ export function PremiumSheet() {
       <Animated.View
         style={[
           s.sheet,
-          { maxHeight: `${86}%`, opacity: anim, transform: [{ translateY }] },
+          // Only the safe area. The tab bar is behind this sheet, so reserving
+          // its height here was blank space under the footer.
+          {
+            paddingBottom: PREMIUM_SHEET.padBottom + insets.bottom,
+            opacity: anim,
+            transform: [{ translateY }],
+          },
         ]}
         accessibilityViewIsModal
+        // VoiceOver's two-finger scrub: the pull, for someone who cannot see
+        // the grabber.
+        onAccessibilityEscape={dismiss}
+        onLayout={(e) => {
+          sheetHeight.current = e.nativeEvent.layout.height;
+        }}
+        {...pan.panHandlers}
       >
         <View style={s.handle} />
 
-        <ScrollView
-          contentContainerStyle={[
-            s.content,
-            { paddingBottom: 20 + Math.max(barInset, insets.bottom) },
-          ]}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+        <Text style={s.eyebrow} numberOfLines={1}>
+          {t('billing:paywall.title')}
+        </Text>
+        <Text
+          style={s.hero}
+          numberOfLines={PREMIUM_SHEET.hero.lines}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
         >
-          <Text style={s.eyebrow}>{t('billing:paywall.title')}</Text>
-          <Text style={s.hero}>{t('billing:paywall.heroTitle')}</Text>
-          <Text style={s.sub}>{t(subtitle.key, subtitle.params)}</Text>
+          {t('billing:paywall.heroTitle')}
+        </Text>
+        <Text
+          style={s.sub}
+          numberOfLines={PREMIUM_SHEET.sub.lines}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {t(subtitle.key, subtitle.params)}
+        </Text>
 
-          <View style={s.plans}>
-            {(['annual', 'monthly'] as const).map((p) => {
-              const active = plan === p;
-              return (
-                <TouchableOpacity
-                  key={p}
-                  style={[s.plan, active && s.planActive]}
-                  onPress={withTap(() => setPlan(p))}
-                  activeOpacity={0.85}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={p === 'annual' ? ANNUAL_PRICE_LABEL : MONTHLY_PRICE_LABEL}
-                >
-                  {p === 'annual' && savings > 0 ? (
-                    <View style={s.saveBadge}>
-                      <Text style={s.saveText}>{`SAVE ${savings}%`}</Text>
-                    </View>
-                  ) : null}
-                  {/* The trial rides on monthly, in the same badge slot the
-                      annual card uses for its discount — so both cards lead
-                      with their own reason to be picked, and neither has to
-                      be read to find one. */}
-                  {p === 'monthly' ? (
-                    <View style={[s.saveBadge, s.trialBadge]}>
-                      <Text style={[s.saveText, s.trialText]}>
-                        {t('billing:paywall.trialBadge')}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {/* Untranslated, exactly as `PaywallScreen` has them. The
-                      plan names, the badge and the feature list are all
-                      English on that screen, so translating only this one
-                      would ship a half-localised pitch where the plan card
-                      reads in Turkish and the benefit above it does not.
-                      The paywall's i18n gap is real and pre-existing; closing
-                      it belongs to both surfaces at once, not to this file. */}
-                  <Text style={s.planName}>{p === 'annual' ? 'ANNUAL' : 'MONTHLY'}</Text>
-                  <Text style={s.planPrice}>
-                    {p === 'annual' ? ANNUAL_PRICE_LABEL : t('billing:paywall.free')}
-                  </Text>
-                  <Text style={s.planCadence}>
-                    {p === 'annual'
-                      ? '/year'
-                      : t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
-                  </Text>
-                  <View style={[s.radio, active && s.radioOn]} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        <View style={s.plans}>
+          {(['annual', 'monthly'] as const).map((p) => {
+            const active = plan === p;
+            return (
+              <TouchableOpacity
+                key={p}
+                style={[s.plan, active && s.planActive]}
+                onPress={withTap(() => setPlan(p))}
+                activeOpacity={0.85}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={p === 'annual' ? ANNUAL_PRICE_LABEL : MONTHLY_PRICE_LABEL}
+              >
+                {p === 'annual' && savings > 0 ? (
+                  <View style={s.saveBadge}>
+                    <Text style={s.saveText}>{`SAVE ${savings}%`}</Text>
+                  </View>
+                ) : null}
+                {/* The trial rides on monthly, in the same badge slot the
+                    annual card uses for its discount — so both cards lead
+                    with their own reason to be picked, and neither has to
+                    be read to find one. */}
+                {p === 'monthly' ? (
+                  <View style={[s.saveBadge, s.trialBadge]}>
+                    <Text style={[s.saveText, s.trialText]} numberOfLines={1}>
+                      {t('billing:paywall.trialBadge')}
+                    </Text>
+                  </View>
+                ) : null}
+                {/* Untranslated, exactly as `PaywallScreen` has them. The
+                    plan names, the badge and the feature list are all
+                    English on that screen, so translating only this one
+                    would ship a half-localised pitch where the plan card
+                    reads in Turkish and the benefit above it does not.
+                    The paywall's i18n gap is real and pre-existing; closing
+                    it belongs to both surfaces at once, not to this file. */}
+                <Text style={s.planName}>{p === 'annual' ? 'ANNUAL' : 'MONTHLY'}</Text>
+                <Text style={s.planPrice} numberOfLines={1}>
+                  {p === 'annual' ? ANNUAL_PRICE_LABEL : t('billing:paywall.free')}
+                </Text>
+                <Text style={s.planCadence} numberOfLines={1}>
+                  {p === 'annual'
+                    ? '/year'
+                    : t('billing:paywall.afterTrial', { price: MONTHLY_PRICE_LABEL })}
+                </Text>
+                <View style={[s.radio, active && s.radioOn]} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-          {/* Deliberately NOT a third card. Three equal options turn a simple
-              "yearly or monthly" into a comparison exercise, and the people who
-              want this one are looking for it rather than weighing it. A quiet
-              row keeps the default decision two-way and still gives the
-              no-subscriptions segment somewhere to go. */}
-          <TouchableOpacity
-            style={[s.lifetime, plan === 'lifetime' && s.lifetimeOn]}
-            onPress={withTap(() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime'))}
-            activeOpacity={0.75}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: plan === 'lifetime' }}
-            accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+        {/* Deliberately NOT a third card. Three equal options turn a simple
+            "yearly or monthly" into a comparison exercise, and the people who
+            want this one are looking for it rather than weighing it. A quiet
+            row keeps the default decision two-way and still gives the
+            no-subscriptions segment somewhere to go. */}
+        <TouchableOpacity
+          style={[s.lifetime, plan === 'lifetime' && s.lifetimeOn]}
+          onPress={withTap(() => setPlan(plan === 'lifetime' ? 'annual' : 'lifetime'))}
+          activeOpacity={0.75}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: plan === 'lifetime' }}
+          accessibilityLabel={t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+        >
+          <Text style={[s.lifetimeText, plan === 'lifetime' && s.lifetimeTextOn]} numberOfLines={1}>
+            {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+          </Text>
+        </TouchableOpacity>
+
+        <PressablePill
+          edge={tc.goldDeep}
+          radius={16}
+          edgeDepth={PREMIUM_SHEET.cta.edge}
+          faceStyle={[s.ctaFace, busy && s.ctaBusy]}
+          style={s.cta}
+          disabled={busy}
+          onPress={withTap(() => void buy())}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          accessibilityLabel={t(ctaKey)}
+        >
+          <Text style={s.ctaText} numberOfLines={1}>
+            {busy ? t('billing:paywall.starting') : t(ctaKey)}
+          </Text>
+        </PressablePill>
+
+        <View style={s.hintBox}>
+          <Text
+            style={s.hint}
+            numberOfLines={PREMIUM_SHEET.hint.lines}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
           >
-            <Text style={[s.lifetimeText, plan === 'lifetime' && s.lifetimeTextOn]}>
-              {t('billing:paywall.lifetimeOffer', { price: LIFETIME_PRICE_LABEL })}
+            {hint}
+          </Text>
+        </View>
+
+        <View style={s.features}>
+          {PAYWALL_FEATURES.map((f) => (
+            <View key={f.title} style={s.featureRow}>
+              <View style={s.featureIcon}>
+                {f.icon === 'brain' ? <BrainIcon size={16} color={tc.gold} />
+                  : f.icon === 'film' ? <FilmIcon size={16} color={tc.gold} />
+                  : f.icon === 'shield' ? <ShieldIcon size={16} animate={false} />
+                  : f.icon === 'block' ? <BlockIcon size={16} color={tc.gold} />
+                  : <ChartIcon size={16} color={tc.gold} />}
+              </View>
+              <Text style={s.featureTitle} numberOfLines={1}>
+                {f.title}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={s.footer}>
+          <TouchableOpacity
+            onPress={withTap(() => void restore())}
+            hitSlop={FOOTER_HIT}
+            accessibilityRole="button"
+            accessibilityLabel={t('billing:paywall.restore')}
+          >
+            <Text style={s.footerLink} numberOfLines={1}>
+              {t('billing:paywall.restore')}
             </Text>
           </TouchableOpacity>
-
-          <PressablePill
-            edge={tc.goldDeep}
-            radius={16}
-            faceStyle={[s.ctaFace, busy && s.ctaBusy]}
-            style={s.cta}
-            disabled={busy}
-            onPress={withTap(() => void buy())}
+          <TouchableOpacity
+            onPress={withTap(dismiss)}
+            hitSlop={FOOTER_HIT}
             accessibilityRole="button"
-            accessibilityState={{ disabled: busy }}
-            accessibilityLabel={t(ctaKey)}
+            accessibilityLabel={t('action.later')}
           >
-            <Text style={s.ctaText}>
-              {busy ? t('billing:paywall.starting') : t(ctaKey)}
+            <Text style={s.footerLink} numberOfLines={1}>
+              {t('action.later')}
             </Text>
-          </PressablePill>
-
-          <Text style={s.hint}>{hint}</Text>
-
-          <View style={s.features}>
-            {PAYWALL_FEATURES.map((f) => (
-              <View key={f.title} style={s.featureRow}>
-                <View style={s.featureIcon}>
-                  {f.icon === 'brain' ? <BrainIcon size={20} color={tc.gold} />
-                    : f.icon === 'film' ? <FilmIcon size={20} color={tc.gold} />
-                    : f.icon === 'shield' ? <ShieldIcon size={20} animate={false} />
-                    : f.icon === 'block' ? <BlockIcon size={20} color={tc.gold} />
-                    : <ChartIcon size={20} color={tc.gold} />}
-                </View>
-                <View style={s.featureText}>
-                  <Text style={s.featureTitle}>{f.title}</Text>
-                  <Text style={s.featureDesc}>{f.desc}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <View style={s.footer}>
-            <TouchableOpacity
-              onPress={withTap(() => void restore())}
-              accessibilityRole="button"
-              accessibilityLabel={t('billing:paywall.restore')}
-            >
-              <Text style={s.footerLink}>{t('billing:paywall.restore')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={withTap(dismiss)}
-              accessibilityRole="button"
-              accessibilityLabel={t('action.later')}
-            >
-              <Text style={s.footerLink}>{t('action.later')}</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </View>
   );
@@ -399,20 +525,21 @@ const makeStyles = (tc: ThemeColors) =>
       borderTopEndRadius: 24,
       borderTopWidth: 1,
       borderColor: tc.border,
-      paddingTop: 10,
+      paddingTop: PREMIUM_SHEET.padTop,
+      paddingHorizontal: 22,
     },
     handle: {
       width: 40,
-      height: 4,
+      height: PREMIUM_SHEET.grabber.height,
       borderRadius: 2,
       backgroundColor: tc.border,
       alignSelf: 'center',
-      marginBottom: 12,
+      marginBottom: PREMIUM_SHEET.grabber.gap,
     },
-    content: { paddingHorizontal: 22 },
 
     eyebrow: {
       fontSize: 9.5,
+      lineHeight: PREMIUM_SHEET.eyebrow.line,
       fontWeight: '800',
       letterSpacing: 1.2,
       color: tc.goldOnSurface,
@@ -420,39 +547,33 @@ const makeStyles = (tc: ThemeColors) =>
     },
     hero: {
       fontFamily: SERIF_FAMILY,
-      fontSize: 26,
-      lineHeight: 32,
+      fontSize: PREMIUM_SHEET.hero.size,
+      lineHeight: PREMIUM_SHEET.hero.line,
       color: tc.text,
       textAlign: 'center',
-      paddingTop: 8,
+      marginTop: PREMIUM_SHEET.hero.gap,
     },
     sub: {
-      fontSize: 13.5,
-      lineHeight: 19,
+      fontSize: PREMIUM_SHEET.sub.size,
+      lineHeight: PREMIUM_SHEET.sub.line,
       color: tc.textSecondary,
       textAlign: 'center',
-      paddingTop: 8,
-      paddingBottom: 18,
+      marginTop: PREMIUM_SHEET.sub.gap,
     },
 
-    features: { paddingBottom: 6 },
-    featureRow: { flexDirection: 'row', alignItems: 'flex-start', paddingBottom: 14 },
-    featureIcon: { width: 30, paddingTop: 1 },
-    featureText: { flex: 1 },
-    featureTitle: { fontSize: 14, fontWeight: '800', color: tc.text },
-    featureDesc: { fontSize: 12.5, lineHeight: 17, color: tc.textSecondary, paddingTop: 2 },
-
-    plans: { flexDirection: 'row', paddingTop: 8, paddingBottom: 16 },
+    // `gap` rather than a margin on each card: a trailing margin on both left
+    // the pair 10pt short of the sheet's right edge.
+    plans: { flexDirection: 'row', gap: 10, marginTop: PREMIUM_SHEET.plans.gap },
     plan: {
       flex: 1,
+      height: PREMIUM_SHEET.plans.height,
       borderRadius: 16,
       borderWidth: 1.5,
       borderColor: tc.border,
       backgroundColor: tc.paper,
-      paddingVertical: 16,
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       alignItems: 'center',
-      marginEnd: 10,
+      justifyContent: 'center',
     },
     planActive: { borderColor: tc.gold, backgroundColor: tc.goldWash },
     saveBadge: {
@@ -471,52 +592,85 @@ const makeStyles = (tc: ThemeColors) =>
     trialText: { color: tc.paper },
     planName: {
       fontSize: 10,
+      lineHeight: 12,
       fontWeight: '800',
       letterSpacing: 0.8,
       color: tc.textFaint,
-      paddingBottom: 4,
     },
-    planPrice: { fontFamily: SERIF_FAMILY, fontSize: 21, color: tc.text },
-    planCadence: { fontSize: 11, color: tc.textFaint, paddingTop: 1 },
+    planPrice: {
+      fontFamily: SERIF_FAMILY,
+      fontSize: 20,
+      lineHeight: 25,
+      color: tc.text,
+      marginTop: 3,
+    },
+    planCadence: { fontSize: 11, lineHeight: 14, color: tc.textFaint },
     radio: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
       borderWidth: 1.5,
       borderColor: tc.border,
-      marginTop: 10,
+      marginTop: 7,
     },
     radioOn: { backgroundColor: tc.gold, borderColor: tc.gold },
 
     lifetime: {
+      height: PREMIUM_SHEET.lifetime.height,
+      marginTop: PREMIUM_SHEET.lifetime.gap,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: tc.border,
-      paddingVertical: 11,
+      paddingHorizontal: 12,
       alignItems: 'center',
-      marginBottom: 14,
+      justifyContent: 'center',
     },
     lifetimeOn: { borderColor: tc.gold, backgroundColor: tc.goldWash },
-    lifetimeText: { fontSize: 12.5, fontWeight: '700', color: tc.textSecondary },
+    lifetimeText: { fontSize: 12.5, lineHeight: 16, fontWeight: '700', color: tc.textSecondary },
     lifetimeTextOn: { color: tc.text },
 
-    hint: {
-      fontSize: 11.5,
-      color: tc.textFaint,
-      textAlign: 'center',
-      paddingBottom: 16,
-    },
-
-    cta: { marginBottom: 14 },
+    cta: { marginTop: PREMIUM_SHEET.cta.gap },
     ctaFace: {
+      height: PREMIUM_SHEET.cta.height,
       borderRadius: 16,
       backgroundColor: tc.gold,
-      paddingVertical: 16,
+      paddingHorizontal: 16,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     ctaBusy: { opacity: 0.6 },
-    ctaText: { fontSize: 15, fontWeight: '900', color: tc.goldDeep },
+    ctaText: { fontSize: 15, lineHeight: 18, fontWeight: '900', color: tc.goldDeep },
 
-    footer: { flexDirection: 'row', justifyContent: 'space-between' },
-    footerLink: { fontSize: 12.5, fontWeight: '700', color: tc.textFaint },
+    hintBox: {
+      height: PREMIUM_SHEET.hint.line * PREMIUM_SHEET.hint.lines,
+      marginTop: PREMIUM_SHEET.hint.gap,
+      justifyContent: 'center',
+    },
+    hint: {
+      fontSize: 11.5,
+      lineHeight: PREMIUM_SHEET.hint.line,
+      color: tc.textFaint,
+      textAlign: 'center',
+    },
+
+    features: { marginTop: PREMIUM_SHEET.features.gap },
+    featureRow: {
+      height: PREMIUM_SHEET.features.row,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    featureIcon: { width: 26 },
+    featureTitle: { flex: 1, fontSize: 13, fontWeight: '800', color: tc.text },
+
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: PREMIUM_SHEET.footer.gap,
+    },
+    footerLink: {
+      fontSize: 12.5,
+      lineHeight: PREMIUM_SHEET.footer.line,
+      fontWeight: '700',
+      color: tc.textFaint,
+    },
   });

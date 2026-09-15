@@ -157,3 +157,49 @@ describe('it is mounted once, at the root', () => {
     expect(screen).toMatch(/serverState\?\.today_done/);
   });
 });
+
+describe('pulling the sheet down is an exit like the others', () => {
+  // Added 2026-09-15 with the no-scroll layout. The thresholds are pure and
+  // tested in utils/__tests__/sheetDismiss.test.ts; these pin the wiring.
+
+  it('closes through the same dismiss as every other exit', () => {
+    // A pull that called `close()` directly would skip the liveness ref, and a
+    // purchase resolving afterwards could write to the closed sheet.
+    const s = sheet();
+    const release = s.slice(s.indexOf('onPanResponderRelease'));
+    expect(release.slice(0, 300)).toMatch(/sheetDismissOnRelease\(g\.dy, g\.vy, sheetHeight\.current\)/);
+    expect(release.slice(0, 300)).toMatch(/dismiss\(\);/);
+  });
+
+  it('claims the drag before the buttons inside the sheet can', () => {
+    // Capture phase: a pull that starts on a plan card still moves the sheet.
+    const s = sheet();
+    expect(s).toMatch(
+      /onMoveShouldSetPanResponderCapture: \(_e, g\) =>\s*shouldClaimSheetDrag\(g\.dx \* directionSign, g\.dy\)/,
+    );
+    expect(s).toMatch(/\{\.\.\.pan\.panHandlers\}/);
+  });
+
+  it('springs back when a pull is interrupted, not only when it is let go', () => {
+    // A call or a system gesture can steal the touch mid-pull. Without this
+    // the sheet would stay wherever the finger was.
+    expect(sheet()).toMatch(/onPanResponderTerminate: \(\) => settle\(\)/);
+  });
+
+  it('forgets the last pull on open', () => {
+    // A sheet pulled most of the way down and closed would otherwise reopen
+    // at that offset.
+    const s = sheet();
+    const open = s.slice(s.indexOf('if (visible) {'), s.indexOf('liveRef.current = false;'));
+    expect(open).toMatch(/drag\.setValue\(0\)/);
+  });
+
+  it('adds the pull to the open and close travel instead of replacing it', () => {
+    // One value for both would make a drag during the entrance fight the spring.
+    expect(sheet()).toMatch(/const translateY = Animated\.add\(/);
+  });
+
+  it('gives VoiceOver its escape gesture', () => {
+    expect(sheet()).toMatch(/onAccessibilityEscape=\{dismiss\}/);
+  });
+});
